@@ -14,7 +14,7 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   // Dashboard implementation
   return (
-    <div className="p-8 flex flex-col items-center justify-center min-h-screen bg-gradient-to-r from-blue-900 via-purple-800 to-red-800 text-white text-center">
+    <div className="p-8 flex flex-col items-center justify-center min-h-screen bg-gradient-to-r from-blue-900 via[40%]-purple-800 to-red-800 text-white text-center">
         <h2 className="text-2xl font-bold mb-4">Welcome, {user.name}!</h2>
         <p className="mb-6">Role: {user.role}</p>
         <button

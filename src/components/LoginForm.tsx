@@ -81,7 +81,7 @@ const LoginForm: React.FC<LoginFormProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-800 to-red-800 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-r from-blue-900 via[40%]-purple-800 to-red-800 flex items-center justify-center p-4">
       {/* Header */}
       <Header />
 
