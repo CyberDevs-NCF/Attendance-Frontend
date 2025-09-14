@@ -31,7 +31,7 @@ const Header: React.FC = () => (
                 <img
                 src={StudentCouncil}
                 alt="Student Council Logo"
-                className="w-30 h-30 object-contain rounded-full"
+                className="w-29 h-29 object-contain rounded-full"
                 style={{ transform: 'translateY(30px)' }}
                 />
             </div>
