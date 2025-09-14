@@ -31,11 +31,9 @@ const App: React.FC = () => {
   const authenticateUser = async (email: string, password: string): Promise<User | null> => {
     await new Promise((resolve) => setTimeout(resolve, 1000));
 
+    //Add your user data here
     const mockUsers = [
-      { email: "admin@ncf.edu.ph", password: "admin123", name: "Jovanny", role: "admin" },
-      { email: "faculty@ncf.edu.ph", password: "faculty123", name: "Faculty User", role: "faculty" },
-      { email: "staff@ncf.edu.ph", password: "staff123", name: "Staff User", role: "staff" },
-      { email: "dev@cyberdevs.org", password: "cyber123", name: "Cyber Developer", role: "developer" },
+      { email: "", password: "", name: "", role: "" },
     ];
 
     const found = mockUsers.find((u) => u.email === email && u.password === password);
