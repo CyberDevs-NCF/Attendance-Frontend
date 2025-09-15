@@ -61,19 +61,20 @@ const SignupForm: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-r from-blue-900 via[40%]-purple-800 to-red-800 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-r from-blue-900 via[40%]-purple-800 to-red-800 flex flex-col items-center justify-start p-4 py-6 sm:py-8">
       {/* Header */}
       <Header />
 
-      <div className="w-full max-w-md">
-        <div className="bg-white/10 backdrop-blur-xl rounded-2xl p-8 border border-white/10 shadow-2xl">
+      {/* Signup Form - Centered in remaining space */}
+      <div className="w-full max-w-md my-5 flex items-center justify-center">
+        <div className="bg-white/10 backdrop-blur-xl rounded-2xl p-6 sm:p-8 border border-white/10 shadow-2xl w-full">
           {/* Title */}
-          <div className="text-center mb-8">
-            <h1 className="text-2xl font-bold text-white mb-2">Create an Account</h1>
+          <div className="text-center mb-6 sm:mb-8">
+            <h1 className="text-xl sm:text-2xl font-bold text-white mb-2">Create an Account</h1>
             <p className="text-gray-200 text-sm">Join us and get started!</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
             {/* Name */}
             <div>
               <label htmlFor="name" className="block text-white text-sm font-medium mb-2">

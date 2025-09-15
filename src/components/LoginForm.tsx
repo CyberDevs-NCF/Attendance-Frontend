@@ -81,19 +81,19 @@ const LoginForm: React.FC<LoginFormProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-r from-blue-900 via[40%]-purple-800 to-red-800 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-r from-blue-900 via[40%]-purple-800 to-red-800 flex flex-col items-center justify-start p-4 py-6 sm:py-3">
       {/* Header */}
       <Header />
 
-      {/* Login Form */}
-      <div className="w-full max-w-md">
+      {/* Login Form - Centered in remaining space */}
+      <div className="w-full max-w-md my-5 flex items-center justify-center">
         <div
-          className="bg-white/10 backdrop-blur-xl rounded-2xl p-8 border border-white/10 shadow-2xl"
+          className="bg-white/10 backdrop-blur-xl rounded-2xl p-6 sm:p-8 border border-white/10 shadow-2xl w-full"
           onKeyDown={handleKeyPress}
         >
           {/* Welcome Title */}
-          <div className="text-center mb-8">
-            <h1 className="text-2xl font-bold text-white mb-2">
+          <div className="text-center mb-6 sm:mb-8">
+            <h1 className="text-xl sm:text-2xl font-bold text-white mb-2">
               Welcome Officers!
             </h1>
           </div>
