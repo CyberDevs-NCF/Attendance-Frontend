@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import Header from "./Header";
+import AuthBackground from "./AuthBackground";
 
 interface LoginFormData {
   email: string;
@@ -81,14 +82,14 @@ const LoginForm: React.FC<LoginFormProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-r from-blue-900 via[40%]-purple-800 to-red-800 flex flex-col items-center justify-start p-4 py-6 sm:py-3">
-      {/* Header */}
+    
+      <AuthBackground>
       <Header />
 
-      {/* Login Form - Centered in remaining space */}
+      {/* Login Form */}
       <div className="w-full max-w-md my-5 flex items-center justify-center">
         <div
-          className="bg-white/10 backdrop-blur-xl rounded-2xl p-6 sm:p-8 border border-white/10 shadow-2xl w-full"
+          className="bg-white/30 backdrop-blur-xl rounded-2xl p-6 sm:p-8 border border-white/10 shadow-2xl w-full"
           onKeyDown={handleKeyPress}
         >
           {/* Welcome Title */}
@@ -112,12 +113,12 @@ const LoginForm: React.FC<LoginFormProps> = ({
               name="email"
               value={formData.email}
               onChange={handleInputChange}
-              placeholder="Gbox email"
+              placeholder="Gbox acc."
               className={`w-full px-4 py-3 rounded-lg bg-white/90 border ${
-                formErrors.email || errors.email
-                  ? "border-red-400 focus:border-red-500"
-                  : "border-gray-300 focus:border-blue-500"
-              } focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all duration-300 text-gray-800 placeholder-gray-500`}
+              formErrors.email || errors.email
+                ? "border-red-400 focus:border-red-500"
+                : "border-gray-300 focus:border-blue-500"
+              } focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all duration-300 text-gray-800 placeholder-gray-500 shadow-xl/30 `}
               disabled={isLoading}
             />
             {(formErrors.email || errors.email) && (
@@ -156,7 +157,7 @@ const LoginForm: React.FC<LoginFormProps> = ({
                   formErrors.password || errors.password
                     ? "border-red-400 focus:border-red-500"
                     : "border-gray-300 focus:border-blue-500"
-                } focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all duration-300 text-gray-800 placeholder-gray-500`}
+                } focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all duration-300 text-gray-800 placeholder-gray-500 shadow-xl/30`}
                 disabled={isLoading}
               />
               <button
@@ -198,7 +199,7 @@ const LoginForm: React.FC<LoginFormProps> = ({
 
           <hr className="border-white/20 my-6" />
 
-          {/* Sign up link */}
+          {/* Sign up Route */}
           <div className="text-center mt-4">
             <p className="text-white text-sm">
               Don't have an account?{" "}
@@ -213,7 +214,7 @@ const LoginForm: React.FC<LoginFormProps> = ({
           </div>
         </div>
       </div>
-    </div>
+    </AuthBackground>
   );
 };
 

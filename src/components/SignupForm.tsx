@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import Header from "./Header";
+import AuthBackground from "./AuthBackground";
 
 interface FormErrors {
   name?: string;
@@ -61,13 +62,13 @@ const SignupForm: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-r from-blue-900 via[40%]-purple-800 to-red-800 flex flex-col items-center justify-start p-4 py-6 sm:py-8">
-      {/* Header */}
+    
+    <AuthBackground>
       <Header />
 
-      {/* Signup Form - Centered in remaining space */}
+      {/* Signup Form */}
       <div className="w-full max-w-md my-5 flex items-center justify-center">
-        <div className="bg-white/10 backdrop-blur-xl rounded-2xl p-6 sm:p-8 border border-white/10 shadow-2xl w-full">
+        <div className="bg-white/30 backdrop-blur-xl rounded-2xl p-6 sm:p-8 border border-white/10 shadow-2xl w-full">
           {/* Title */}
           <div className="text-center mb-6 sm:mb-8">
             <h1 className="text-xl sm:text-2xl font-bold text-white mb-2">Create an Account</h1>
@@ -86,12 +87,12 @@ const SignupForm: React.FC = () => {
                 name="name"
                 value={form.name}
                 onChange={handleChange}
-                placeholder="John Doe"
+                placeholder="Full Name"
                 className={`w-full px-4 py-3 rounded-lg bg-white/90 border ${
                   formErrors.name
                     ? "border-red-400 focus:border-red-500"
                     : "border-gray-300 focus:border-blue-500"
-                } focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-gray-800 placeholder-gray-500 transition-all duration-300`}
+                } focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-gray-800 placeholder-gray-500 transition-all duration-300 shadow-xl/30`}
                 disabled={isLoading}
               />
               {formErrors.name && (
@@ -115,7 +116,7 @@ const SignupForm: React.FC = () => {
                   formErrors.email
                     ? "border-red-400 focus:border-red-500"
                     : "border-gray-300 focus:border-blue-500"
-                } focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-gray-800 placeholder-gray-500 transition-all duration-300`}
+                } focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-gray-800 placeholder-gray-500 transition-all duration-300 shadow-xl/30`}
                 disabled={isLoading}
               />
               {formErrors.email && (
@@ -140,7 +141,7 @@ const SignupForm: React.FC = () => {
                     formErrors.password
                       ? "border-red-400 focus:border-red-500"
                       : "border-gray-300 focus:border-blue-500"
-                  } focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-gray-800 placeholder-gray-500 transition-all duration-300`}
+                  } focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-gray-800 placeholder-gray-500 transition-all duration-300 shadow-xl/30`}
                   disabled={isLoading}
                 />
                 <button
@@ -198,7 +199,7 @@ const SignupForm: React.FC = () => {
           </div>
         </div>
       </div>
-    </div>
+    </AuthBackground>
   );
 };
 
