@@ -8,6 +8,7 @@ export interface Event {
   time: string;
   description?: string;
   status: 'upcoming' | 'ongoing' | 'completed';
+  attendees?: Attendee[];
 }
 
 export interface User {
@@ -20,8 +21,24 @@ export interface EventsDashboardProps {
   onLogout: () => void;
   
 }
+
 export interface SidebarLink {
   label: string;
   icon: ComponentType<{ className?: string }>; // 👈 make it a component
   href?: string;
+}
+
+export interface Attendee {
+  id: string;
+  name: string;
+  block: string;
+  year: string;
+  course: string;
+  timeIn?: string;
+}
+
+export interface Theme {
+  name: string;
+  icon: string;
+  active: boolean;
 }

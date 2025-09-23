@@ -1,5 +1,6 @@
 import React from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
+import { X } from 'lucide-react';
 
 interface ModalProps {
   isOpen: boolean;
@@ -8,31 +9,73 @@ interface ModalProps {
 }
 
 export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, children }) => {
-  if (!isOpen) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900 bg-opacity-50 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        transition={{ duration: 0.2 }}
-        className="relative w-[90%] max-w-5xl max-h-[90vh] overflow-y-auto rounded-2xl border border-white border-opacity-20 bg-gray-800 bg-opacity-30 backdrop-blur-lg p-6 shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Close Button */}
-        <button
-          onClick={onClose}
-          className="absolute top-3 right-3 text-white text-2xl hover:text-red-400 transition"
-          aria-label="Close"
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
         >
-        </button>
-
-        {children}
-      </motion.div>
-    </div>
+          {/* Light backdrop with subtle blur */}
+          <motion.div 
+            initial={{ backdropFilter: 'blur(0px)' }}
+            animate={{ backdropFilter: 'blur(12px)' }}
+            exit={{ backdropFilter: 'blur(0px)' }}
+            transition={{ duration: 0.4 }}
+            className="absolute inset-0 bg-gradient-to-br from-white/30 via-gray-100/40 to-white/20"
+          />
+          
+          <motion.div
+            initial={{ 
+              opacity: 0, 
+              scale: 0.85, 
+              y: 40,
+              rotateX: 10
+            }}
+            animate={{ 
+              opacity: 1, 
+              scale: 1, 
+              y: 0,
+              rotateX: 0
+            }}
+            exit={{ 
+              opacity: 0, 
+              scale: 0.85, 
+              y: 40,
+              rotateX: 10
+            }}
+            transition={{ 
+              duration: 0.5,
+              ease: [0.25, 0.46, 0.45, 0.94],
+              type: "spring",
+              stiffness: 300,
+              damping: 30
+            }}
+            className="relative w-[95%] max-w-6xl max-h-[95vh] overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* White Glassmorphism container */}
+            <div className="relative rounded-3xl border border-white/50 bg-white/30 backdrop-blur-3xl shadow-2xl overflow-hidden">
+              {/* White gradient overlay for enhanced glass effect */}
+              <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-white/50 via-white/30 to-white/20 pointer-events-none"></div>
+              
+              {/* Inner shadow for depth */}
+              <div className="absolute inset-0 rounded-3xl shadow-inner shadow-gray-200/30 pointer-events-none"></div>
+              
+              {/* Content container with proper spacing and scroll */}
+              <div className="relative p-8 max-h-[95vh] overflow-y-auto">
+                {/* Content without color override - let children handle their own colors */}
+                <div className="w-full">
+                  {children}
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };

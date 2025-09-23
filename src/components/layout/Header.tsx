@@ -22,7 +22,7 @@ export const Header: React.FC<HeaderProps> = ({ user, onAddEvent }) => {
       </div>
 
       {/* Title and Add Button Section */}
-      <div className="w-full flex justify-between items-center mt-5 mb-1 px-4">
+      <div className="w-full flex justify-between items-center mt-5 mb-1 py-4">
         <h1 className="text-white text-xl md:text-2xl font-semibold">
           Events Management
         </h1>

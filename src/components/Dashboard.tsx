@@ -7,7 +7,7 @@ import AuthBackground from "./AuthBackground";
 import { Modal } from './ui/Modal';
 import { SearchFilter } from './ui/SearchFilter';
 import { EventForm } from './forms/EventForm';
-import { EventDetailsModal } from './modals/EventDetailsModal';
+import { EventDetailsPage } from './modals/EventDetailsPage';
 import { Logo, LogoIcon } from './sidebar/Logo';
 import { Sidebar, SidebarBody, SidebarLinkComponent } from './sidebar/Sidebar';
 import { EventsTable } from './events/EventsTable';
@@ -27,9 +27,11 @@ const Dashboard: React.FC<EventsDashboardProps> = ({ user, onLogout }) => {
   const [open, setOpen] = useState(false);
   const [activeLink, setActiveLink] = useState("Events");
 
+  // View states
+  const [currentView, setCurrentView] = useState<'events' | 'event-details'>('events');
+  
   // Modal states
   const [showEventForm, setShowEventForm] = useState(false);
-  const [showEventDetails, setShowEventDetails] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
 
@@ -51,8 +53,13 @@ const Dashboard: React.FC<EventsDashboardProps> = ({ user, onLogout }) => {
     const event = getEventById(eventId);
     if (event) {
       setSelectedEvent(event);
-      setShowEventDetails(true);
+      setCurrentView('event-details');
     }
+  };
+
+  const handleBackToEvents = () => {
+    setCurrentView('events');
+    setSelectedEvent(null);
   };
 
   const handleUpdate = (eventId: number) => {
@@ -101,43 +108,57 @@ const Dashboard: React.FC<EventsDashboardProps> = ({ user, onLogout }) => {
       );
     }
 
-    // Default Events view
-    return (
-      <>
-        <Header user={user} onAddEvent={handleAddEvent} />
-        
-        <SearchFilter
-          searchTerm={searchTerm}
-          setSearchTerm={setSearchTerm}
-          filterStatus={filterStatus}
-          setFilterStatus={setFilterStatus}
+    // Events view - check if we're showing event details
+    if (activeLink === "Events" && currentView === 'event-details' && selectedEvent) {
+      return (
+        <EventDetailsPage
+          event={selectedEvent}
+          onBack={handleBackToEvents}
         />
+      );
+    }
 
-        {/* Events Display */}
-        <EventsTable
-          events={filteredEvents}
-          onViewDetails={handleViewDetails}
-          onEdit={handleUpdate}
-          onDelete={handleDelete}
-        />
+    // Default Events list view
+    if (activeLink === "Events") {
+      return (
+        <>
+          <Header user={user} onAddEvent={handleAddEvent} />
+          
+          <SearchFilter
+            searchTerm={searchTerm}
+            setSearchTerm={setSearchTerm}
+            filterStatus={filterStatus}
+            setFilterStatus={setFilterStatus}
+          />
 
-        <EventsCards
-          events={filteredEvents}
-          onViewDetails={handleViewDetails}
-          onEdit={handleUpdate}
-          onDelete={handleDelete}
-          variant="tablet"
-        />
+          {/* Events Display */}
+          <EventsTable
+            events={filteredEvents}
+            onViewDetails={handleViewDetails}
+            onEdit={handleUpdate}
+            onDelete={handleDelete}
+          />
 
-        <EventsCards
-          events={filteredEvents}
-          onViewDetails={handleViewDetails}
-          onEdit={handleUpdate}
-          onDelete={handleDelete}
-          variant="mobile"
-        />
-      </>
-    );
+          <EventsCards
+            events={filteredEvents}
+            onViewDetails={handleViewDetails}
+            onEdit={handleUpdate}
+            onDelete={handleDelete}
+            variant="tablet"
+          />
+
+          <EventsCards
+            events={filteredEvents}
+            onViewDetails={handleViewDetails}
+            onEdit={handleUpdate}
+            onDelete={handleDelete}
+            variant="mobile"
+          />
+        </>
+      );
+    }
+
+    return null;
   };
 
   return (
@@ -175,25 +196,29 @@ const Dashboard: React.FC<EventsDashboardProps> = ({ user, onLogout }) => {
                     key={idx}
                     link={link}
                     isActive={activeLink === link.label}
-                    onClick={() => setActiveLink(link.label)}
+                    onClick={() => {
+                      setActiveLink(link.label);
+                      // Reset view when changing navigation
+                      if (link.label === "Events") {
+                        setCurrentView('events');
+                        setSelectedEvent(null);
+                      }
+                    }}
                   />
                 ))}
               </div>
 
-
               {/* Settings Link */}
               <div className="px-4 pb-4">
                 <SidebarLinkComponent
-                link={SETTINGS_LINK} // ✅ Just pass the component
-                isActive={activeLink === SETTINGS_LINK.label}
-                onClick={() => setActiveLink(SETTINGS_LINK.label)}
-              />
-
-                {/* {open && (
-                  <span className="whitespace-nowrap ml-11">
-                    {SETTINGS_LINK.label}
-                  </span>
-                )} */}
+                  link={SETTINGS_LINK}
+                  isActive={activeLink === SETTINGS_LINK.label}
+                  onClick={() => {
+                    setActiveLink(SETTINGS_LINK.label);
+                    setCurrentView('events');
+                    setSelectedEvent(null);
+                  }}
+                />
               </div>
             </div>
           </SidebarBody>
@@ -213,15 +238,6 @@ const Dashboard: React.FC<EventsDashboardProps> = ({ user, onLogout }) => {
               event={editingEvent || undefined}
               onSave={handleSaveEvent}
               onCancel={handleCancelForm}
-            />
-          </Modal>
-        )}
-
-        {showEventDetails && selectedEvent && (
-          <Modal isOpen={showEventDetails} onClose={() => setShowEventDetails(false)}>
-            <EventDetailsModal
-              event={selectedEvent}
-              onClose={() => setShowEventDetails(false)}
             />
           </Modal>
         )}
