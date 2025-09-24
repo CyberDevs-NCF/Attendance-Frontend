@@ -8,7 +8,6 @@ import Dashboard from "./components/Dashboard";
 interface User {
   email: string;
   name: string;
-  role: string;
 }
 
 interface LoginFormData {
@@ -33,11 +32,11 @@ const App: React.FC = () => {
 
     //Add your user data here
     const mockUsers = [
-      { email: "", password: "", name: "", role: "" },
+      { email: "admin@ncf.edu.ph", password: "admin123", name: "Jovanny De Leon" },
     ];
 
     const found = mockUsers.find((u) => u.email === email && u.password === password);
-    return found ? { email: found.email, name: found.name, role: found.role } : null;
+    return found ? { email: found.email, name: found.name } : null;
   };
 
   // Handle login
