@@ -179,7 +179,7 @@ const SignupForm: React.FC = () => {
             </button>
           </form>
 
-          {/* Success message below button */}
+          {/* Success + QR preview */}
           {successMessage && (
             <p className="text-green-400 text-sm mt-4 text-center">{successMessage}</p>
           )}
