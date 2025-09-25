@@ -14,6 +14,7 @@ import { EventsTable } from './events/EventsTable';
 import { EventsCards } from './events/EventsCards';
 import { SettingsPanel } from './settings/SettingsPanel';
 import { Header } from './layout/Header';
+import { QRScannerPage } from './modals/QRScannerPage';
 
 // Hooks and utilities
 import { useEvents } from '../hooks/useEvents';
@@ -28,7 +29,7 @@ const Dashboard: React.FC<EventsDashboardProps> = ({ user, onLogout }) => {
   const [activeLink, setActiveLink] = useState("Events");
 
   // View states
-  const [currentView, setCurrentView] = useState<'events' | 'event-details'>('events');
+const [currentView, setCurrentView] = useState<'events' | 'event-details' | 'qr-scanner'>('events');
   
   // Modal states
   const [showEventForm, setShowEventForm] = useState(false);
@@ -94,6 +95,20 @@ const Dashboard: React.FC<EventsDashboardProps> = ({ user, onLogout }) => {
     setEditingEvent(null);
   };
 
+    const handleOpenQRScanner = () => {
+    setCurrentView('qr-scanner');
+  };
+
+  const handleBackFromQRScanner = () => {
+    setCurrentView('event-details');
+  };
+
+  const handleStudentScanned = (studentId: string) => {
+    console.log('Student scanned:', studentId);
+    // Here you can add logic to record attendance
+    // For example: updateAttendance(selectedEvent.id, studentId);
+  };
+
   const renderMainContent = () => {
     if (activeLink === "Settings") {
       return <SettingsPanel user={user} onLogout={onLogout} />;
@@ -108,17 +123,29 @@ const Dashboard: React.FC<EventsDashboardProps> = ({ user, onLogout }) => {
       );
     }
 
-    // Events view - check if we're showing event details
+    // QR Scanner view - ADD THIS NEW SECTION
+    if (activeLink === "Events" && currentView === 'qr-scanner' && selectedEvent) {
+      return (
+        <QRScannerPage
+          event={selectedEvent}
+          onBack={handleBackFromQRScanner}
+          onStudentScanned={handleStudentScanned}
+        />
+      );
+    }
+
+    // Events view - UPDATE this existing section
     if (activeLink === "Events" && currentView === 'event-details' && selectedEvent) {
       return (
         <EventDetailsPage
           event={selectedEvent}
           onBack={handleBackToEvents}
+          onScanQR={handleOpenQRScanner}
         />
       );
     }
 
-    // Default Events list view
+    // Default Events list view - this stays the same
     if (activeLink === "Events") {
       return (
         <>
