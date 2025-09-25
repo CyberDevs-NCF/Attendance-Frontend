@@ -7,9 +7,10 @@ import { getStatusColor } from '../../utils/constants';
 interface EventDetailsPageProps {
   event: Event & { attendees?: Attendee[] };
   onBack: () => void;
+  onScanQR?: () => void;
 }
 
-export const EventDetailsPage: React.FC<EventDetailsPageProps> = ({ event, onBack }) => {
+export const EventDetailsPage: React.FC<EventDetailsPageProps> = ({ event, onBack, onScanQR }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBlock, setSelectedBlock] = useState('All Blocks');
   const [selectedYear, setSelectedYear] = useState('All Years');
@@ -73,7 +74,9 @@ export const EventDetailsPage: React.FC<EventDetailsPageProps> = ({ event, onBac
           <ArrowLeft size={20} className="mr-2" />
           <span className="text-lg font-medium">Back</span>
         </button>
-        <button className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors">
+        <button
+          onClick={onScanQR}
+          className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors">
           <QrCode size={16} />
           <span>Scan QR Code</span>
         </button>
