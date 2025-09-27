@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ArrowLeft, QrCode, ChevronDown } from 'lucide-react';
 import { motion } from 'framer-motion';
 import type { Event, Attendee } from '../../types';
-import { getStatusColor } from '../../utils/constants';
+// import { getStatusColor } from '../../utils/constants';
 
 interface EventDetailsPageProps {
   event: Event & { attendees?: Attendee[] };
@@ -196,7 +196,7 @@ export const EventDetailsPage: React.FC<EventDetailsPageProps> = ({ event, onBac
             </thead>
             <tbody className="divide-y divide-gray-200">
               {filteredAttendees.length > 0 ? (
-                filteredAttendees.map((attendee, index) => (
+                filteredAttendees.map((attendee) => (
                   <tr
                     key={attendee.id}
                     className="hover:bg-gray-50 transition-colors"

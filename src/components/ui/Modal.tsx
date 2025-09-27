@@ -1,6 +1,5 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X } from 'lucide-react';
 
 interface ModalProps {
   isOpen: boolean;
@@ -9,6 +8,8 @@ interface ModalProps {
 }
 
 export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, children }) => {
+  // reference onClose to satisfy noUnusedParameters without changing behavior
+  void onClose;
   return (
     <AnimatePresence>
       {isOpen && (

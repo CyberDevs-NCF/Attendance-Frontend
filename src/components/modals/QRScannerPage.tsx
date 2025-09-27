@@ -30,8 +30,9 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
   
   const webcamRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
-  const scanIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const stopCamera = useCallback(() => {
     if (stream) {
@@ -77,11 +78,27 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
     
     if (code) {
       console.log('QR Code detected:', code.data);
-      setScannedData(code.data);
-      
-      // Call the callback if provided
+
+      // Try to parse JSON payload expected from Registration QR
+      let studentIdToEmit: string | undefined;
+      let displayText = code.data;
+      try {
+        const parsed = JSON.parse(code.data);
+        if (parsed && typeof parsed === 'object') {
+          // Support both new and potential legacy keys
+          studentIdToEmit = parsed.student_id || parsed.studentId || parsed.id;
+          // Pretty print JSON for UI
+          displayText = JSON.stringify(parsed, null, 2);
+        }
+      } catch (_) {
+        // Not JSON, fallback to raw string
+      }
+
+      setScannedData(displayText);
+
+      // Call the callback if provided with extracted student id or raw
       if (onStudentScanned) {
-        onStudentScanned(code.data);
+        onStudentScanned(studentIdToEmit || code.data);
       }
       
       // Stop scanning after successful scan
@@ -142,6 +159,77 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
     }
   }, [stream, stopCamera, captureAndScan]);
 
+  // Handle QR upload (fallback when camera not available)
+  const handleUploadClick = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setError(null);
+    setIsLoading(true);
+
+    try {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = canvasRef.current;
+          if (!canvas) return;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return;
+
+          // Resize canvas to image size and draw image
+          canvas.width = img.width;
+          canvas.height = img.height;
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const code = jsQR(imageData.data, imageData.width, imageData.height);
+
+          if (code) {
+            // Parse as in live scanner
+            let studentIdToEmit: string | undefined;
+            let displayText = code.data;
+            try {
+              const parsed = JSON.parse(code.data);
+              if (parsed && typeof parsed === 'object') {
+                studentIdToEmit = parsed.student_id || parsed.studentId || parsed.id;
+                displayText = JSON.stringify(parsed, null, 2);
+              }
+            } catch (_) {
+              // non-JSON
+            }
+
+            setScannedData(displayText);
+            if (onStudentScanned) {
+              onStudentScanned(studentIdToEmit || code.data);
+            }
+            // Ensure camera (if running) is stopped after success
+            stopCamera();
+            setIsLoading(false);
+          } else {
+            setError('No QR code detected in the uploaded image.');
+            setIsLoading(false);
+          }
+        };
+        if (typeof reader.result === 'string') {
+          img.src = reader.result;
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      console.error('Failed to read image:', err);
+      setError('Failed to process the uploaded image.');
+      setIsLoading(false);
+    } finally {
+      // reset input value to allow re-uploading the same file
+      e.target.value = '';
+    }
+  }, [onStudentScanned, stopCamera]);
+
   useEffect(() => {
     // Auto-start camera when component mounts
     startCamera();
@@ -184,20 +272,36 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
         <div className="bg-white rounded-lg shadow-sm p-6 flex-1 flex flex-col">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg font-semibold text-gray-800">Camera Scanner</h3>
-            {isScanning && (
-              <div className="flex items-center space-x-4">
-                <span className="text-sm text-gray-500">
-                  Scanning... ({scanAttempts} attempts)
-                </span>
-                <button
-                  onClick={stopCamera}
-                  className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
-                >
-                  <X size={16} />
-                  <span>Stop</span>
-                </button>
-              </div>
-            )}
+            <div className="flex items-center space-x-3">
+              {isScanning && (
+                <>
+                  <span className="text-sm text-gray-500">
+                    Scanning... ({scanAttempts} attempts)
+                  </span>
+                  <button
+                    onClick={stopCamera}
+                    className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
+                  >
+                    <X size={16} />
+                    <span>Stop</span>
+                  </button>
+                </>
+              )}
+              <button
+                onClick={handleUploadClick}
+                className="bg-gray-700 hover:bg-gray-800 text-white px-4 py-2 rounded-lg transition-colors flex items-center space-x-2"
+              >
+                <span>Upload QR Image</span>
+                <span className="text-xs opacity-80">(This is just a test)</span>
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleFileChange}
+              />
+            </div>
           </div>
 
           {/* Scanner Area */}

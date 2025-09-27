@@ -15,13 +15,14 @@ import { EventsCards } from './events/EventsCards';
 import { SettingsPanel } from './settings/SettingsPanel';
 import { Header } from './layout/Header';
 import { QRScannerPage } from './modals/QRScannerPage';
+import RegistrationForm from './forms/RegistrationForm';
 
 // Hooks and utilities
 import { useEvents } from '../hooks/useEvents';
 import { NAVIGATION_LINKS, SETTINGS_LINK } from '../utils/constants';
 
 // Types
-import type { EventsDashboardProps, Event, User } from '../types';
+import type { EventsDashboardProps, Event } from '../types';
 
 const Dashboard: React.FC<EventsDashboardProps> = ({ user, onLogout }) => {
   // Sidebar state
@@ -116,9 +117,8 @@ const [currentView, setCurrentView] = useState<'events' | 'event-details' | 'qr-
 
     if (activeLink === "Registration") {
       return (
-        <div className="text-center text-white py-8">
-          <h2 className="text-2xl font-semibold mb-4">Registration Management</h2>
-          <p className="text-gray-300">Registration features coming soon...</p>
+        <div className="py-4">
+          <RegistrationForm />
         </div>
       );
     }

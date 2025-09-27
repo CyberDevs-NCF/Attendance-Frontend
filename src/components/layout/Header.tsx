@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, ChevronDown } from 'lucide-react';
+import { Plus /*, ChevronDown*/ } from 'lucide-react';
 import type { User } from '../../types';
 
 interface HeaderProps {
