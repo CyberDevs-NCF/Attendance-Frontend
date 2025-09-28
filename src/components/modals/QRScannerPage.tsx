@@ -79,16 +79,31 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
     if (code) {
       console.log('QR Code detected:', code.data);
 
-      // Try to parse JSON payload expected from Registration QR
+      // Try to parse JSON payload (Unified schema expected):
+      // {
+      //   institution: string,
+      //   first_name: string,
+      //   last_name: string,
+      //   course_year_section: string,
+      //   student_id: string,
+      //   email: string,
+      //   generated_at: ISO string,
+      //   academic_year: string
+      // }
+      // Legacy backup schemas may have fname/lname or name/course/year_level/section.
       let studentIdToEmit: string | undefined;
       let displayText = code.data;
       try {
         const parsed = JSON.parse(code.data);
         if (parsed && typeof parsed === 'object') {
-          // Support both new and potential legacy keys
           studentIdToEmit = parsed.student_id || parsed.studentId || parsed.id;
-          // Pretty print JSON for UI
-          displayText = JSON.stringify(parsed, null, 2);
+          // Normalize for display: if unified schema, show concise ordered JSON
+          const normalized = { ...parsed };
+          // If legacy keys present, attempt to synthesize unified style preview
+          if (!normalized.first_name && normalized.fname) normalized.first_name = normalized.fname;
+          if (!normalized.last_name && normalized.lname) normalized.last_name = normalized.lname;
+          if (!normalized.course_year_section && normalized.section_year) normalized.course_year_section = normalized.section_year;
+          displayText = JSON.stringify(normalized, null, 2);
         }
       } catch (_) {
         // Not JSON, fallback to raw string
@@ -96,12 +111,9 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
 
       setScannedData(displayText);
 
-      // Call the callback if provided with extracted student id or raw
       if (onStudentScanned) {
         onStudentScanned(studentIdToEmit || code.data);
       }
-      
-      // Stop scanning after successful scan
       stopCamera();
     }
   }, [onStudentScanned, stopCamera]);
@@ -190,24 +202,25 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
           const code = jsQR(imageData.data, imageData.width, imageData.height);
 
           if (code) {
-            // Parse as in live scanner
+            // Parse as in live scanner with unified + legacy support
             let studentIdToEmit: string | undefined;
             let displayText = code.data;
             try {
               const parsed = JSON.parse(code.data);
               if (parsed && typeof parsed === 'object') {
                 studentIdToEmit = parsed.student_id || parsed.studentId || parsed.id;
-                displayText = JSON.stringify(parsed, null, 2);
+                const normalized: any = { ...parsed };
+                if (!normalized.first_name && normalized.fname) normalized.first_name = normalized.fname;
+                if (!normalized.last_name && normalized.lname) normalized.last_name = normalized.lname;
+                if (!normalized.course_year_section && normalized.section_year) normalized.course_year_section = normalized.section_year;
+                displayText = JSON.stringify(normalized, null, 2);
               }
-            } catch (_) {
-              // non-JSON
-            }
+            } catch (_) {}
 
             setScannedData(displayText);
             if (onStudentScanned) {
               onStudentScanned(studentIdToEmit || code.data);
             }
-            // Ensure camera (if running) is stopped after success
             stopCamera();
             setIsLoading(false);
           } else {
@@ -454,3 +467,4 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
     </div>
   );
 };
+

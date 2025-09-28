@@ -67,3 +67,29 @@ export default tseslint.config([
   },
 ])
 ```
+
+---
+
+## QR Code Schema (Unified)
+
+The dashboard Registration tab now acts as a backup generator and produces the EXACT same JSON structure as the main generator at `Student-QR-Generator`.
+
+```jsonc
+{
+  "institution": "Naga College Foundation",
+  "first_name": "Juan",
+  "last_name": "Dela Cruz",
+  "course_year_section": "BSCS 3A",
+  "student_id": "24-12345",
+  "email": "sample@gbox.ncf.edu.ph",
+  "generated_at": "2025-09-28T09:15:23.123Z", // ISO timestamp
+  "academic_year": "2024-2025"
+}
+```
+
+Notes:
+- `academic_year` hard‑coded for now (update when academic year rolls over).
+- Scanner tolerates legacy/older fields (fname/lname/section_year) but always normalizes to the unified shape when displaying.
+- `student_id` is the primary key used after scanning.
+
+If you update the schema in the main generator, replicate the same change in `RegistrationForm` to keep parity.
