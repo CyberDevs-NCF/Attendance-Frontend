@@ -214,7 +214,10 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
           setStream(mediaStream);
           setIsScanning(true);
           setIsLoading(false);
-          enumerateVideoDevices();
+          // Only enumerate devices once to avoid loops
+          if (devices.length === 0) {
+            enumerateVideoDevices();
+          }
           scanIntervalRef.current = setInterval(captureAndScan, 300);
         } catch (playError: any) {
           appendDebug('video.play() rejected: ' + playError?.message);
@@ -267,7 +270,7 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
       appendDebug(`Device changed to: ${selectedDeviceId}, restarting camera`);
       startCamera();
     }
-  }, [selectedDeviceId, startCamera, isScanning, appendDebug]);
+  }, [selectedDeviceId]); // Only depend on device change
 
   useEffect(() => {
     appendDebug('QRScannerPage component mounted');
@@ -277,7 +280,7 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
       appendDebug('QRScannerPage component unmounting');
       stopCamera();
     };
-  }, [enumerateVideoDevices, startCamera, stopCamera, appendDebug]); // Empty dependency array to avoid infinite re-renders
+  }, []); // Remove dependencies to prevent infinite loop // Empty dependency array to avoid infinite re-renders
 
   // Handle QR upload (fallback when camera not available)
   const handleUploadClick = useCallback(() => {
