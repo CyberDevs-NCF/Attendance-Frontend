@@ -37,12 +37,17 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>('');
   const [enumerationError, setEnumerationError] = useState<string | null>(null);
   const [insecureContext, setInsecureContext] = useState<boolean>(false);
+  const [debugInfo, setDebugInfo] = useState<string[]>([]);
   
   const webcamRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const appendDebug = useCallback((msg: string) => {
+    setDebugInfo(prev => [...prev, `${new Date().toISOString()} ${msg}`].slice(-50));
+  }, []);
 
   const enumerateVideoDevices = useCallback(async () => {
     try {
@@ -154,40 +159,73 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
 
   const startCamera = useCallback(async () => {
     try {
+      appendDebug('startCamera invoked');
       setError(null);
       setIsLoading(true);
       setScanAttempts(0);
 
-      if (stream) stopCamera();
+      if (stream) {
+        appendDebug('Stopping existing stream');
+        stopCamera();
+      }
 
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        appendDebug('mediaDevices API missing');
         throw new Error('Camera not supported in this browser');
       }
 
       const constraints: MediaStreamConstraints = {
-        video: selectedDeviceId ? { deviceId: { exact: selectedDeviceId } } : { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+        video: selectedDeviceId ? { deviceId: { exact: selectedDeviceId } } : { facingMode: 'environment' },
         audio: false
       };
+      appendDebug('Requesting getUserMedia with constraints ' + JSON.stringify(constraints));
 
       const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+      appendDebug('Stream acquired: ' + mediaStream.getVideoTracks().map(t => t.label).join(', '));
       if (webcamRef.current) {
         webcamRef.current.srcObject = mediaStream;
+
+        // Attach event listeners for diagnostics
+        const v = webcamRef.current;
+        const onLoadedMetadata = () => {
+          appendDebug(`video loadedmetadata; readyState=${v.readyState} w=${v.videoWidth} h=${v.videoHeight}`);
+        };
+        const onCanPlay = () => {
+          appendDebug('video canplay event');
+        };
+        v.addEventListener('loadedmetadata', onLoadedMetadata, { once: true });
+        v.addEventListener('canplay', onCanPlay, { once: true });
+
         try {
-          await webcamRef.current.play();
+          await v.play();
+          appendDebug('video.play() resolved');
           setStream(mediaStream);
           setIsScanning(true);
           setIsLoading(false);
-          // Refresh device labels (after permission granted labels appear)
           enumerateVideoDevices();
           scanIntervalRef.current = setInterval(captureAndScan, 300);
-        } catch (playError) {
-          console.error('Video play error:', playError);
-          setError('Failed to start camera playback');
+        } catch (playError: any) {
+          appendDebug('video.play() rejected: ' + playError?.message);
+          setError('Failed to start camera playback (autoplay blocked?). Click Start again.');
           setIsLoading(false);
         }
+
+        // Fallback: if after 2500ms still loading, force display + stop loading spinner
+        setTimeout(() => {
+          if (v && isLoading) {
+            appendDebug(`Fallback timeout fired. readyState=${v.readyState}`);
+            if (v.readyState >= 2) {
+              setIsLoading(false);
+              setIsScanning(true);
+            } else if (!error) {
+              setError('Camera seems stuck initializing. Try switching camera or checking permissions.');
+              setIsLoading(false);
+            }
+          }
+        }, 2500);
       }
     } catch (err: any) {
-      console.error('Camera access error:', err);
+      appendDebug('getUserMedia error: ' + (err?.name || 'Err') + ' ' + (err?.message || ''));
       let errorMessage = `Unable to access camera (${err.name || 'Error'}). `;
       if (err.name === 'NotAllowedError' || err.name === 'SecurityError') {
         errorMessage += 'Permission denied. Check browser site settings and allow camera.';
@@ -201,7 +239,7 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
       setError(errorMessage);
       setIsLoading(false);
     }
-  }, [stream, stopCamera, captureAndScan, selectedDeviceId, enumerateVideoDevices]);
+  }, [stream, stopCamera, captureAndScan, selectedDeviceId, enumerateVideoDevices, appendDebug, error, isLoading]);
 
   // Re-start when selected device changes (if already scanning)
   useEffect(() => {
@@ -391,6 +429,7 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
                   <Camera size={48} className="text-blue-500 animate-pulse" />
                 </div>
                 <p className="text-gray-600">Starting camera...</p>
+                <p className="text-xs text-gray-400 max-w-xs">If this takes longer than a few seconds: ensure you accepted the permission prompt, no other app is using the camera, and try Refresh or switch device.</p>
               </div>
             )}
 
@@ -527,6 +566,12 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
               <li>• The scanner automatically detects and reads QR codes</li>
               <li>• Make sure the QR code is not damaged or distorted</li>
             </ul>
+            {debugInfo.length > 0 && (
+              <details className="mt-4 text-xs">
+                <summary className="cursor-pointer select-none text-blue-700">Debug Info</summary>
+                <pre className="mt-2 max-h-48 overflow-auto bg-white/60 p-2 rounded border border-blue-200 whitespace-pre-wrap">{debugInfo.join('\n')}</pre>
+              </details>
+            )}
           </div>
         </div>
       </div>
