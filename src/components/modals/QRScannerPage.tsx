@@ -51,23 +51,28 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
 
   const enumerateVideoDevices = useCallback(async () => {
     try {
+      appendDebug('Enumerating video devices...');
       setEnumerationError(null);
       const all = await navigator.mediaDevices.enumerateDevices();
+      appendDebug(`Found ${all.length} total devices`);
       const vids = all.filter(d => d.kind === 'videoinput').map((d, idx) => ({
         deviceId: d.deviceId,
         label: d.label || `Camera ${idx + 1}`
       }));
+      appendDebug(`Found ${vids.length} video devices: ${vids.map(v => v.label).join(', ')}`);
       setDevices(vids);
       if (vids.length > 0 && !selectedDeviceId) {
         setSelectedDeviceId(vids[0].deviceId);
+        appendDebug(`Auto-selected device: ${vids[0].label}`);
       }
       if (vids.length === 0) {
         setEnumerationError('No video input devices detected.');
       }
     } catch (err: any) {
+      appendDebug(`Device enumeration error: ${err?.message}`);
       setEnumerationError('Unable to list cameras: ' + (err?.message || 'Unknown error'));
     }
-  }, [selectedDeviceId]);
+  }, [selectedDeviceId, appendDebug]);
 
   useEffect(() => {
     setInsecureContext(!window.isSecureContext && window.location.hostname !== 'localhost');
@@ -175,14 +180,21 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
       }
 
       const constraints: MediaStreamConstraints = {
-        video: selectedDeviceId ? { deviceId: { exact: selectedDeviceId } } : { facingMode: 'environment' },
+        video: selectedDeviceId ? 
+          { deviceId: { exact: selectedDeviceId }, width: { ideal: 1280 }, height: { ideal: 720 } } : 
+          { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: false
       };
       appendDebug('Requesting getUserMedia with constraints ' + JSON.stringify(constraints));
 
       const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
-      appendDebug('Stream acquired: ' + mediaStream.getVideoTracks().map(t => t.label).join(', '));
+      const tracks = mediaStream.getVideoTracks();
+      appendDebug(`Stream acquired: ${tracks.length} tracks - ${tracks.map(t => `${t.label} (${t.readyState})`).join(', ')}`);
+      
       if (webcamRef.current) {
+        // Force refresh video element
+        webcamRef.current.srcObject = null;
+        await new Promise(resolve => setTimeout(resolve, 100));
         webcamRef.current.srcObject = mediaStream;
 
         // Attach event listeners for diagnostics
@@ -198,7 +210,7 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
 
         try {
           await v.play();
-          appendDebug('video.play() resolved');
+          appendDebug(`video.play() resolved - dimensions: ${v.videoWidth}x${v.videoHeight}, readyState: ${v.readyState}`);
           setStream(mediaStream);
           setIsScanning(true);
           setIsLoading(false);
@@ -206,8 +218,12 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
           scanIntervalRef.current = setInterval(captureAndScan, 300);
         } catch (playError: any) {
           appendDebug('video.play() rejected: ' + playError?.message);
-          setError('Failed to start camera playback (autoplay blocked?). Click Start again.');
+          // Try to force play anyway
+          setStream(mediaStream);
+          setIsScanning(true);
           setIsLoading(false);
+          setError('Autoplay blocked - video may not display but try scanning anyway');
+          scanIntervalRef.current = setInterval(captureAndScan, 300);
         }
 
         // Fallback: if after 3500ms still loading, force display + stop loading spinner
@@ -358,14 +374,24 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
               {devices.length === 0 && <option value="">No Cameras</option>}
             </select>
             <button
-              onClick={enumerateVideoDevices}
+              onClick={() => {
+                appendDebug('Refresh button clicked');
+                enumerateVideoDevices();
+              }}
               type="button"
               className="text-xs px-2 py-1 border rounded bg-white hover:bg-gray-50"
               title="Refresh camera list"
             >Refresh</button>
           </div>
           <button
-            onClick={() => { if (isScanning) { stopCamera(); } else { startCamera(); } }}
+            onClick={() => { 
+              appendDebug(`${isScanning ? 'Stop' : 'Start'} Camera button clicked`);
+              if (isScanning) { 
+                stopCamera(); 
+              } else { 
+                startCamera(); 
+              } 
+            }}
             className={`px-3 py-1.5 rounded text-sm font-medium text-white ${isScanning ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-600 hover:bg-blue-700'}`}
           >{isScanning ? 'Stop Camera' : 'Start Camera'}</button>
         </div>
@@ -504,7 +530,11 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
                     playsInline
                     muted
                     className="w-full h-full object-cover"
-                    style={{ transform: 'scaleX(-1)' }} /* Mirror the video for better UX */
+                    style={{ transform: 'scaleX(-1)' }}
+                    onLoadedMetadata={() => appendDebug(`Video metadata loaded: ${webcamRef.current?.videoWidth}x${webcamRef.current?.videoHeight}`)}
+                    onCanPlay={() => appendDebug('Video can play')}
+                    onPlaying={() => appendDebug('Video playing')}
+                    onError={(e) => appendDebug(`Video error: ${e.currentTarget.error?.message || 'Unknown'}`)}
                   />
                   
                   {/* Scanning overlay */}
