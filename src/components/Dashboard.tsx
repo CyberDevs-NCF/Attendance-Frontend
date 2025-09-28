@@ -14,7 +14,7 @@ import { EventsTable } from './events/EventsTable';
 import { EventsCards } from './events/EventsCards';
 import { SettingsPanel } from './settings/SettingsPanel';
 import { Header } from './layout/Header';
-import { QRScannerPage } from './modals/QRScannerPage';
+import QRScannerPage from './modals/QRScannerPage';
 import RegistrationForm from './forms/RegistrationForm';
 
 // Hooks and utilities
@@ -30,7 +30,8 @@ const Dashboard: React.FC<EventsDashboardProps> = ({ user, onLogout }) => {
   const [activeLink, setActiveLink] = useState("Events");
 
   // View states
-const [currentView, setCurrentView] = useState<'events' | 'event-details' | 'qr-scanner'>('events');
+const [currentView, setCurrentView] = useState<'events' | 'event-details'>('events');
+const [showQRScanner, setShowQRScanner] = useState(false);
   
   // Modal states
   const [showEventForm, setShowEventForm] = useState(false);
@@ -97,18 +98,15 @@ const [currentView, setCurrentView] = useState<'events' | 'event-details' | 'qr-
   };
 
     const handleOpenQRScanner = () => {
-    setCurrentView('qr-scanner');
-  };
+      if (selectedEvent) {
+        setShowQRScanner(true);
+      }
+    };
 
-  const handleBackFromQRScanner = () => {
-    setCurrentView('event-details');
-  };
-
-  const handleStudentScanned = (studentId: string) => {
-    console.log('Student scanned:', studentId);
-    // Here you can add logic to record attendance
-    // For example: updateAttendance(selectedEvent.id, studentId);
-  };
+    const handleStudentScanned = (studentId: string) => {
+      console.log('Student scanned:', studentId);
+      // TODO: integrate with attendance API
+    };
 
   const renderMainContent = () => {
     if (activeLink === "Settings") {
@@ -120,17 +118,6 @@ const [currentView, setCurrentView] = useState<'events' | 'event-details' | 'qr-
         <div className="py-4">
           <RegistrationForm />
         </div>
-      );
-    }
-
-    // QR Scanner view - ADD THIS NEW SECTION
-    if (activeLink === "Events" && currentView === 'qr-scanner' && selectedEvent) {
-      return (
-        <QRScannerPage
-          event={selectedEvent}
-          onBack={handleBackFromQRScanner}
-          onStudentScanned={handleStudentScanned}
-        />
       );
     }
 
@@ -265,6 +252,15 @@ const [currentView, setCurrentView] = useState<'events' | 'event-details' | 'qr-
               event={editingEvent || undefined}
               onSave={handleSaveEvent}
               onCancel={handleCancelForm}
+            />
+          </Modal>
+        )}
+        {showQRScanner && selectedEvent && (
+          <Modal isOpen={showQRScanner} onClose={() => setShowQRScanner(false)}>
+            <QRScannerPage
+              onClose={() => setShowQRScanner(false)}
+              headerTitle={`Scanning: ${selectedEvent.title}`}
+              onScan={handleStudentScanned}
             />
           </Modal>
         )}

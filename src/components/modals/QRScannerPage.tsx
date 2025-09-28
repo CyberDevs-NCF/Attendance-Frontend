@@ -1,690 +1,383 @@
-// To use this component in your project, install the required dependencies:
-// npm install jsqr
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { Camera, Flashlight, Loader2, RotateCcw, X } from 'lucide-react';
+import { Html5Qrcode } from 'html5-qrcode';
+import type { Html5QrcodeCameraScanConfig, Html5QrcodeResult } from 'html5-qrcode';
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { ArrowLeft, X, Camera, AlertCircle } from 'lucide-react';
-import jsQR from 'jsqr'; // Uncomment this in your actual project
-
-interface Event {
-  title: string;
-  date: string;
-  location: string;
-}
-
+// Types for html5-qrcode (library ships its own types, but we narrow for our usage)
 interface QRScannerPageProps {
-  event: Event;
-  onBack: () => void;
-  onStudentScanned?: (studentId: string) => void;
+  onClose: () => void;
+  onScan: (text: string, raw?: Html5QrcodeResult) => void;
+  headerTitle?: string;
+  // html5-qrcode exposes optional format config but its type may not include property; keep generic any[]
+  allowedFormats?: any[]; // eslint-disable-line @typescript-eslint/no-explicit-any
+  fps?: number; // scan frames per second
+  qrbox?: number | { width: number; height: number };
+  disableFlip?: boolean; // disable mirrored video
 }
 
-// Add a type for media devices we care about
-interface CameraDevice {
-  deviceId: string;
-  label: string;
+// Helper to check torch capability on track
+async function toggleTorch(track: MediaStreamTrack, turnOn: boolean): Promise<boolean> {
+  try {
+    // Attempt applying constraint; some browsers support this unofficially
+    // @ts-ignore: torch constraint not in standard lib yet
+    await track.applyConstraints({ advanced: [{ torch: turnOn }] });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
-export const QRScannerPage: React.FC<QRScannerPageProps> = ({ 
-  event, 
-  onBack, 
-  onStudentScanned 
+export const QRScannerPage: React.FC<QRScannerPageProps> = ({
+  onClose,
+  onScan,
+  headerTitle = 'Scan QR Code',
+  allowedFormats,
+  fps = 10,
+  qrbox = 280,
+  disableFlip = false,
 }) => {
-  const [isScanning, setIsScanning] = useState(false);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
+  const containerIdRef = useRef(`qr-reader-${Math.random().toString(36).slice(2)}`);
+  const [cameras, setCameras] = useState<{ id: string; label: string }[]>([]);
+  const [cameraId, setCameraId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [scannedData, setScannedData] = useState<string | null>(null);
-  const [scanAttempts, setScanAttempts] = useState(0);
-  const [devices, setDevices] = useState<CameraDevice[]>([]);
-  const [selectedDeviceId, setSelectedDeviceId] = useState<string>('');
-  const [enumerationError, setEnumerationError] = useState<string | null>(null);
-  const [insecureContext, setInsecureContext] = useState<boolean>(false);
-  const [debugInfo, setDebugInfo] = useState<string[]>([]);
-  
-  const webcamRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [stream, setStream] = useState<MediaStream | null>(null);
-  const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [torchOn, setTorchOn] = useState(false);
+  const mediaTrackRef = useRef<MediaStreamTrack | null>(null);
+  const [scannedText, setScannedText] = useState<string | null>(null);
+  const [parsedJson, setParsedJson] = useState<unknown | null>(null);
+  const [isJson, setIsJson] = useState(false);
+  const [showRaw, setShowRaw] = useState(true);
 
-  const appendDebug = useCallback((msg: string) => {
-    setDebugInfo(prev => [...prev, `${new Date().toISOString()} ${msg}`].slice(-50));
+  // Helper: attempt to parse JSON and set state
+  const handleDecoded = useCallback((decodedText: string, rawResult?: Html5QrcodeResult) => {
+    // Avoid re-processing identical scans in rapid succession
+    setScannedText(prev => {
+      if (prev === decodedText) return prev; // ignore duplicate
+      return decodedText;
+    });
+    try {
+      const obj = JSON.parse(decodedText);
+      setParsedJson(obj);
+      setIsJson(true);
+    } catch {
+      setParsedJson(null);
+      setIsJson(false);
+    }
+    onScan(decodedText, rawResult);
+  }, [onScan]);
+
+  const stopScanner = useCallback(async () => {
+    try {
+      if (scannerRef.current && scannerRef.current.isScanning) {
+        await scannerRef.current.stop();
+      }
+      mediaTrackRef.current?.stop();
+    } catch {/* ignore */}
   }, []);
 
-  const enumerateVideoDevices = useCallback(async () => {
+  const startScanner = useCallback(async (deviceId: string) => {
+    setIsLoading(true);
+    setError(null);
     try {
-      appendDebug('Enumerating video devices...');
-      setEnumerationError(null);
-      const all = await navigator.mediaDevices.enumerateDevices();
-      appendDebug(`Found ${all.length} total devices`);
-      const vids = all.filter(d => d.kind === 'videoinput').map((d, idx) => ({
-        deviceId: d.deviceId,
-        label: d.label || `Camera ${idx + 1}`
-      }));
-      appendDebug(`Found ${vids.length} video devices: ${vids.map(v => v.label).join(', ')}`);
-      setDevices(vids);
-      if (vids.length > 0 && !selectedDeviceId) {
-        setSelectedDeviceId(vids[0].deviceId);
-        appendDebug(`Auto-selected device: ${vids[0].label}`);
-      }
-      if (vids.length === 0) {
-        setEnumerationError('No video input devices detected.');
-      }
-    } catch (err: any) {
-      appendDebug(`Device enumeration error: ${err?.message}`);
-      setEnumerationError('Unable to list cameras: ' + (err?.message || 'Unknown error'));
-    }
-  }, [selectedDeviceId, appendDebug]);
-
-  useEffect(() => {
-    setInsecureContext(!window.isSecureContext && window.location.hostname !== 'localhost');
-  }, []);
-
-  const stopCamera = useCallback(() => {
-    if (stream) {
-      stream.getTracks().forEach(track => track.stop());
-      setStream(null);
-    }
-    if (webcamRef.current) {
-      webcamRef.current.srcObject = null;
-    }
-    if (scanIntervalRef.current) {
-      clearInterval(scanIntervalRef.current);
-      scanIntervalRef.current = null;
-    }
-    setIsScanning(false);
-    setIsLoading(false);
-  }, [stream]);
-
-  const captureAndScan = useCallback(() => {
-    const video = webcamRef.current;
-    const canvas = canvasRef.current;
-    
-    if (!video || !canvas || video.readyState !== video.HAVE_ENOUGH_DATA) {
-      return;
-    }
-
-    const context = canvas.getContext('2d');
-    if (!context) return;
-
-    // Set canvas dimensions to match video
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-
-    // Draw the video frame to canvas
-    context.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-    // Get image data for QR detection
-    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-    
-    // Use jsQR to detect QR codes
-    const code = jsQR(imageData.data, imageData.width, imageData.height);
-    
-    setScanAttempts(prev => prev + 1);
-    
-    if (code) {
-      console.log('QR Code detected:', code.data);
-
-      // Try to parse JSON payload (Unified schema expected):
-      // {
-      //   institution: string,
-      //   first_name: string,
-      //   last_name: string,
-      //   course_year_section: string,
-      //   student_id: string,
-      //   email: string,
-      //   generated_at: ISO string,
-      //   academic_year: string
-      // }
-      // Legacy backup schemas may have fname/lname or name/course/year_level/section.
-      let studentIdToEmit: string | undefined;
-      let displayText = code.data;
-      try {
-        const parsed = JSON.parse(code.data);
-        if (parsed && typeof parsed === 'object') {
-          studentIdToEmit = parsed.student_id || parsed.studentId || parsed.id;
-          // Normalize for display: if unified schema, show concise ordered JSON
-          const normalized = { ...parsed };
-          // If legacy keys present, attempt to synthesize unified style preview
-          if (!normalized.first_name && normalized.fname) normalized.first_name = normalized.fname;
-          if (!normalized.last_name && normalized.lname) normalized.last_name = normalized.lname;
-          if (!normalized.course_year_section && normalized.section_year) normalized.course_year_section = normalized.section_year;
-          displayText = JSON.stringify(normalized, null, 2);
-        }
-      } catch (_) {
-        // Not JSON, fallback to raw string
+      if (!scannerRef.current) {
+        scannerRef.current = new Html5Qrcode(containerIdRef.current);
+      } else if (scannerRef.current.isScanning) {
+        await scannerRef.current.stop();
       }
 
-      setScannedData(displayText);
-
-      if (onStudentScanned) {
-        onStudentScanned(studentIdToEmit || code.data);
-      }
-      stopCamera();
-    }
-  }, [onStudentScanned, stopCamera]);
-
-  const startCamera = useCallback(async () => {
-    try {
-      appendDebug('startCamera invoked');
-      setError(null);
-      setIsLoading(true);
-      setScanAttempts(0);
-
-      if (stream) {
-        appendDebug('Stopping existing stream');
-        stopCamera();
-      }
-
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        appendDebug('mediaDevices API missing');
-        throw new Error('Camera not supported in this browser');
-      }
-
-      const constraints: MediaStreamConstraints = {
-        video: selectedDeviceId ? 
-          { deviceId: { exact: selectedDeviceId }, width: { ideal: 1280 }, height: { ideal: 720 } } : 
-          { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: false
+      const config: Html5QrcodeCameraScanConfig = {
+        fps,
+        qrbox,
+        disableFlip,
+        // Enforce square to avoid letterboxing that can show gray zones
+        // @ts-ignore - aspectRatio supported by library though not typed
+        aspectRatio: 1.0,
       };
-      appendDebug('Requesting getUserMedia with constraints ' + JSON.stringify(constraints));
+      // Some builds allow specifying supported formats via experimental property; ignore if unsupported
+      if (allowedFormats) {
+        // @ts-ignore - optional experimental property
+        config.formatsToSupport = allowedFormats;
+      }
 
-      const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
-      const tracks = mediaStream.getVideoTracks();
-      appendDebug(`Stream acquired: ${tracks.length} tracks - ${tracks.map(t => `${t.label} (${t.readyState})`).join(', ')}`);
-      
-      if (webcamRef.current) {
-        // Force refresh video element
-        webcamRef.current.srcObject = null;
-        await new Promise(resolve => setTimeout(resolve, 100));
-        webcamRef.current.srcObject = mediaStream;
+      await scannerRef.current.start(
+        { deviceId: { exact: deviceId } },
+        config,
+        (decodedText, rawResult) => {
+          handleDecoded(decodedText, rawResult);
+        },
+        (scanError) => { void scanError; }
+      );
 
-        // Attach event listeners for diagnostics
-        const v = webcamRef.current;
-        const onLoadedMetadata = () => {
-          appendDebug(`video loadedmetadata; readyState=${v.readyState} w=${v.videoWidth} h=${v.videoHeight}`);
-        };
-        const onCanPlay = () => {
-          appendDebug('video canplay event');
-        };
-        v.addEventListener('loadedmetadata', onLoadedMetadata, { once: true });
-        v.addEventListener('canplay', onCanPlay, { once: true });
+      // Try to capture track for torch
+      // @ts-expect-error private field _localMediaStream may not be public
+      const stream: MediaStream | undefined = scannerRef.current?._localMediaStream;
+      mediaTrackRef.current = stream?.getVideoTracks()?.[0] || null;
 
-        // Set up video element with better error handling
-        const playVideo = async () => {
-          try {
-            appendDebug(`Attempting video.play() - current readyState: ${v.readyState}`);
-            await v.play();
-            appendDebug(`video.play() resolved - dimensions: ${v.videoWidth}x${v.videoHeight}, readyState: ${v.readyState}`);
-          } catch (playError: any) {
-            appendDebug('video.play() rejected: ' + playError?.message);
-            // Try without await
-            v.play().catch(() => {
-              appendDebug('Second play attempt also failed');
+      // Post-start styling adjustments to remove any remaining gray overlay space / shaded regions
+      const containerEl = document.getElementById(containerIdRef.current);
+      if (containerEl) {
+        // Hide default shaded regions that html5-qrcode injects
+        containerEl.querySelectorAll('.qr-shaded-region').forEach(el => {
+          (el as HTMLElement).style.display = 'none';
+        });
+        const videoEl = containerEl.querySelector('video') as HTMLVideoElement | null;
+        if (videoEl) {
+          videoEl.style.width = '100%';
+          videoEl.style.height = '100%';
+          videoEl.style.objectFit = 'cover';
+          videoEl.style.top = '0';
+          videoEl.style.left = '0';
+          videoEl.style.position = 'absolute';
+        }
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to start camera');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [allowedFormats, disableFlip, fps, onScan, qrbox]);
+
+  // Enumerate cameras on mount
+  useEffect(() => {
+    let mounted = true;
+    Html5Qrcode.getCameras()
+      .then((devices) => {
+        if (!mounted) return;
+        const mapped = devices.map(d => ({ id: d.id, label: d.label || `Camera ${d.id}` }));
+        setCameras(mapped);
+        // Prefer environment facing camera if label hints
+        const preferred = mapped.find(c => /back|rear|environment/i.test(c.label)) || mapped[0];
+        if (preferred) {
+          setCameraId(preferred.id);
+        }
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : 'Cannot access cameras'));
+    return () => { mounted = false; };
+  }, []);
+
+  // Start when cameraId changes
+  useEffect(() => {
+    if (cameraId) {
+      startScanner(cameraId);
+    }
+    return () => { void stopScanner(); };
+  }, [cameraId, startScanner, stopScanner]);
+
+  // Clean up on unmount
+  useEffect(() => {
+    return () => { void stopScanner(); };
+  }, [stopScanner]);
+
+  const handleTorchToggle = async () => {
+    if (!mediaTrackRef.current) return;
+    const success = await toggleTorch(mediaTrackRef.current, !torchOn);
+    if (success) setTorchOn(v => !v);
+  };
+
+  const handleRetry = () => {
+    if (cameraId) startScanner(cameraId);
+  };
+
+  const flattenObject = (obj: unknown, prefix = ''): { key: string; value: string }[] => {
+    if (obj === null) return [{ key: prefix || '(null)', value: 'null' }];
+    if (typeof obj !== 'object') {
+      return [{ key: prefix || 'value', value: String(obj) }];
+    }
+    const entries: { key: string; value: string }[] = [];
+    for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+      const newKey = prefix ? `${prefix}.${k}` : k;
+      if (typeof v === 'object' && v !== null) {
+        if (Array.isArray(v)) {
+          if (v.every(item => typeof item !== 'object')) {
+            entries.push({ key: newKey, value: v.map(item => String(item)).join(', ') });
+          } else {
+            v.forEach((item, idx) => {
+              entries.push(...flattenObject(item, `${newKey}[${idx}]`));
             });
           }
-        };
-
-        // Force video setup regardless of play success
-        setStream(mediaStream);
-        setIsScanning(true);
-        setIsLoading(false);
-        
-        // Start scanning interval regardless of video display
-        if (!scanIntervalRef.current) {
-          scanIntervalRef.current = setInterval(captureAndScan, 300);
+        } else {
+          entries.push(...flattenObject(v, newKey));
         }
-        
-        // Try to play video
-        await playVideo();
-        
-        // Only enumerate devices once to avoid loops
-        if (devices.length === 0) {
-          enumerateVideoDevices();
-        }
-
-        // Fallback: if after 3500ms still loading, force display + stop loading spinner
-        setTimeout(() => {
-          if (v && isLoading) {
-            appendDebug(`Fallback timeout fired. readyState=${v.readyState} videoWidth=${v.videoWidth} videoHeight=${v.videoHeight}`);
-            if (v.videoWidth > 0 && v.videoHeight > 0) {
-              appendDebug('Video has dimensions, forcing start');
-              setIsLoading(false);
-              setIsScanning(true);
-              if (!scanIntervalRef.current) {
-                scanIntervalRef.current = setInterval(captureAndScan, 300);
-              }
-            } else {
-              appendDebug('Video has no dimensions, showing manual controls');
-              // Keep in loading state but the UI will show manual buttons
-            }
-          }
-        }, 3500);
-      }
-    } catch (err: any) {
-      appendDebug('getUserMedia error: ' + (err?.name || 'Err') + ' ' + (err?.message || ''));
-      let errorMessage = `Unable to access camera (${err.name || 'Error'}). `;
-      if (err.name === 'NotAllowedError' || err.name === 'SecurityError') {
-        errorMessage += 'Permission denied. Check browser site settings and allow camera.';
-      } else if (err.name === 'NotFoundError' || err.name === 'OverconstrainedError') {
-        errorMessage += 'Requested camera not found. Try a different device.';
-      } else if (err.name === 'NotReadableError') {
-        errorMessage += 'Camera is in use by another application.';
       } else {
-        errorMessage += 'Please check camera settings and try again.';
+        entries.push({ key: newKey, value: String(v) });
       }
-      setError(errorMessage);
-      setIsLoading(false);
     }
-  }, [stream, stopCamera, captureAndScan, selectedDeviceId, enumerateVideoDevices, appendDebug, error, isLoading]);
+    return entries;
+  };
 
-  // Re-start when selected device changes (if already scanning)
-  useEffect(() => {
-    if (selectedDeviceId && isScanning) {
-      appendDebug(`Device changed to: ${selectedDeviceId}, restarting camera`);
-      startCamera();
+  const flattened = isJson && parsedJson ? flattenObject(parsedJson) : [];
+
+  const copyRaw = () => {
+    if (!scannedText) return;
+    navigator.clipboard.writeText(scannedText).catch(() => {/* ignore */});
+  };
+
+  const handleSwitchCamera = (id: string) => {
+    if (id !== cameraId) {
+      setTorchOn(false);
+      setCameraId(id);
     }
-  }, [selectedDeviceId]); // Only depend on device change
-
-  useEffect(() => {
-    appendDebug('QRScannerPage component mounted');
-    enumerateVideoDevices();
-    startCamera();
-    return () => {
-      appendDebug('QRScannerPage component unmounting');
-      stopCamera();
-    };
-  }, []); // Remove dependencies to prevent infinite loop // Empty dependency array to avoid infinite re-renders
-
-  // Handle QR upload (fallback when camera not available)
-  const handleUploadClick = useCallback(() => {
-    fileInputRef.current?.click();
-  }, []);
-
-  const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setError(null);
-    setIsLoading(true);
-
-    try {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = canvasRef.current;
-          if (!canvas) return;
-          const ctx = canvas.getContext('2d');
-          if (!ctx) return;
-
-          // Resize canvas to image size and draw image
-          canvas.width = img.width;
-          canvas.height = img.height;
-          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          const code = jsQR(imageData.data, imageData.width, imageData.height);
-
-          if (code) {
-            // Parse as in live scanner with unified + legacy support
-            let studentIdToEmit: string | undefined;
-            let displayText = code.data;
-            try {
-              const parsed = JSON.parse(code.data);
-              if (parsed && typeof parsed === 'object') {
-                studentIdToEmit = parsed.student_id || parsed.studentId || parsed.id;
-                const normalized: any = { ...parsed };
-                if (!normalized.first_name && normalized.fname) normalized.first_name = normalized.fname;
-                if (!normalized.last_name && normalized.lname) normalized.last_name = normalized.lname;
-                if (!normalized.course_year_section && normalized.section_year) normalized.course_year_section = normalized.section_year;
-                displayText = JSON.stringify(normalized, null, 2);
-              }
-            } catch (_) {}
-
-            setScannedData(displayText);
-            if (onStudentScanned) {
-              onStudentScanned(studentIdToEmit || code.data);
-            }
-            stopCamera();
-            setIsLoading(false);
-          } else {
-            setError('No QR code detected in the uploaded image.');
-            setIsLoading(false);
-          }
-        };
-        if (typeof reader.result === 'string') {
-          img.src = reader.result;
-        }
-      };
-      reader.readAsDataURL(file);
-    } catch (err) {
-      console.error('Failed to read image:', err);
-      setError('Failed to process the uploaded image.');
-      setIsLoading(false);
-    } finally {
-      // reset input value to allow re-uploading the same file
-      e.target.value = '';
-    }
-  }, [onStudentScanned, stopCamera]);
+  };
 
   return (
-    <div className="text-gray-800 h-screen bg-gray-100 p-6 flex flex-col">
-      {/* Hidden canvas for image processing */}
-      <canvas ref={canvasRef} style={{ display: 'none' }} />
-      
+    <motion.div
+      initial={{ opacity: 0, y: 30 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 30 }}
+      transition={{ duration: 0.35 }}
+      className="h-[90vh] flex flex-col"
+    >
       {/* Header */}
-      <div className="flex justify-between items-center mb-6 flex-shrink-0 gap-4 flex-wrap">
-        <button onClick={onBack} className="flex items-center text-gray-700 hover:text-gray-900 transition-colors">
-          <ArrowLeft size={20} className="mr-2" />
-          <span className="text-lg font-medium">Back</span>
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
+          <Camera size={20} /> {headerTitle}
+        </h1>
+        <button
+          onClick={() => { void stopScanner(); onClose(); }}
+          className="p-2 rounded-full hover:bg-gray-200 text-gray-600 hover:text-gray-800 transition-colors"
+          aria-label="Close scanner"
+        >
+          <X size={18} />
         </button>
-        <div className="flex items-center gap-3 flex-wrap">
-          <h1 className="text-xl font-semibold text-gray-800">Scan Student QR Code</h1>
-          <div className="flex items-center gap-2">
-            <select
-              value={selectedDeviceId}
-              onChange={e => {
-                appendDebug(`Camera selection changed to: ${e.target.value}`);
-                setSelectedDeviceId(e.target.value);
-              }}
-              className="px-2 py-1 border rounded text-sm bg-white"
-              title="Select Camera"
-            >
-              {devices.map(d => (
-                <option key={d.deviceId} value={d.deviceId}>{d.label}</option>
-              ))}
-              {devices.length === 0 && <option value="">No Cameras</option>}
-            </select>
-            <button
-              onClick={() => {
-                appendDebug('Refresh button clicked');
-                enumerateVideoDevices();
-              }}
-              type="button"
-              className="text-xs px-2 py-1 border rounded bg-white hover:bg-gray-50"
-              title="Refresh camera list"
-            >Refresh</button>
-          </div>
-          <button
-            onClick={() => { 
-              appendDebug(`${isScanning ? 'Stop' : 'Start'} Camera button clicked (current state: isScanning=${isScanning}, isLoading=${isLoading})`);
-              if (isScanning) { 
-                stopCamera(); 
-              } else { 
-                startCamera(); 
-              } 
-            }}
-            className={`px-3 py-1.5 rounded text-sm font-medium text-white ${isScanning ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-600 hover:bg-blue-700'}`}
-          >{isScanning ? 'Stop Camera' : 'Start Camera'}</button>
-        </div>
       </div>
 
-      {/* Debug Panel - Always Visible for troubleshooting */}
-      <div className="mb-4 p-3 bg-gray-50 rounded border text-xs">
-        <div className="flex justify-between items-center mb-2">
-          <strong>Debug Status:</strong>
-          <span>Devices: {devices.length} | Selected: {selectedDeviceId ? 'Yes' : 'No'} | Loading: {isLoading ? 'Yes' : 'No'} | Scanning: {isScanning ? 'Yes' : 'No'}</span>
+      {/* Controls */}
+      <div className="flex flex-wrap gap-3 mb-4 items-center">
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-gray-600">Camera:</label>
+          <select
+            value={cameraId || ''}
+            onChange={(e) => handleSwitchCamera(e.target.value)}
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            {cameras.map(c => (
+              <option key={c.id} value={c.id}>{c.label}</option>
+            ))}
+          </select>
         </div>
-        {debugInfo.length > 0 && (
-          <details className="mt-2">
-            <summary className="cursor-pointer select-none font-medium">View Debug Log ({debugInfo.length} entries)</summary>
-            <pre className="mt-2 max-h-32 overflow-auto bg-white p-2 rounded border whitespace-pre-wrap text-xs">{debugInfo.slice(-10).join('\n')}</pre>
-          </details>
-        )}
+        <button
+          onClick={handleTorchToggle}
+            disabled={!mediaTrackRef.current}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          <Flashlight size={16} /> {torchOn ? 'Torch Off' : 'Torch On'}
+        </button>
+        <button
+          onClick={handleRetry}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white hover:bg-gray-50"
+        >
+          <RotateCcw size={16} /> Restart
+        </button>
       </div>
 
-      {insecureContext && (
-        <div className="mb-4 p-3 rounded bg-yellow-100 border border-yellow-300 text-yellow-900 text-sm">
-          Camera may fail because this page is not served over HTTPS. Use localhost or deploy with HTTPS.
-        </div>
-      )}
-      {enumerationError && (
-        <div className="mb-4 p-3 rounded bg-red-50 border border-red-200 text-red-700 text-sm">{enumerationError}</div>
-      )}
-
-      {/* Event Info */}
-      <div className="bg-white rounded-lg p-4 shadow-sm mb-6 flex-shrink-0">
-        <h2 className="font-medium text-gray-800 mb-2">Scanning for: {event.title}</h2>
-        <p className="text-sm text-gray-600">
-          {event.date} • {event.location}
-        </p>
-      </div>
-
-      {/* Scanner Section */}
-      <div className="flex-1 flex flex-col">
-        <div className="bg-white rounded-lg shadow-sm p-6 flex-1 flex flex-col">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold text-gray-800">Camera Scanner</h3>
-            <div className="flex items-center space-x-3">
-              {isScanning && (
-                <>
-                  <span className="text-sm text-gray-500">
-                    Scanning... ({scanAttempts} attempts)
-                  </span>
-                  <button
-                    onClick={stopCamera}
-                    className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
-                  >
-                    <X size={16} />
-                    <span>Stop</span>
-                  </button>
-                </>
-              )}
-              <button
-                onClick={handleUploadClick}
-                className="bg-gray-700 hover:bg-gray-800 text-white px-4 py-2 rounded-lg transition-colors flex items-center space-x-2"
-              >
-                <span>Upload QR Image</span>
-                <span className="text-xs opacity-80">(This is just a test)</span>
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleFileChange}
-              />
+      {/* Scanner container */}
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-6 overflow-hidden">
+        <div className="relative rounded-2xl bg-black/80 aspect-square max-w-xl w-full mx-auto flex items-center justify-center overflow-hidden">
+          <div id={containerIdRef.current} className="w-full h-full" />
+          {isLoading && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 text-white gap-3">
+              <Loader2 className="animate-spin" size={32} />
+              <p className="text-sm">Starting camera...</p>
             </div>
-          </div>
-
-          {/* Scanner Area */}
-          <div className="flex-1 flex flex-col items-center justify-center">
-            {isLoading && !error && (
-              <div className="flex flex-col items-center space-y-4 text-center">
-                {/* Show video element even during loading */}
-                {webcamRef.current?.srcObject && (
-                  <div className="relative w-full max-w-md aspect-square bg-black rounded-lg overflow-hidden mb-4">
-                    <video
-                      ref={webcamRef}
-                      autoPlay
-                      playsInline
-                      muted
-                      className="w-full h-full object-cover"
-                      style={{ transform: 'scaleX(-1)' }}
-                    />
-                    <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30">
-                      <div className="text-white text-sm bg-black bg-opacity-50 px-3 py-1 rounded">
-                        Initializing camera...
-                      </div>
-                    </div>
-                  </div>
-                )}
-                {!webcamRef.current?.srcObject && (
-                  <div className="w-32 h-32 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <Camera size={48} className="text-blue-500 animate-pulse" />
-                  </div>
-                )}
-                <p className="text-gray-600">Starting camera...</p>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => {
-                      setIsLoading(false);
-                      setIsScanning(true);
-                      if (!scanIntervalRef.current) {
-                        scanIntervalRef.current = setInterval(captureAndScan, 300);
-                      }
-                    }}
-                    className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm"
-                  >
-                    Force Start Scanning
-                  </button>
-                  <button
-                    onClick={captureAndScan}
-                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
-                  >
-                    Try Capture Now
-                  </button>
-                </div>
-                <p className="text-xs text-gray-400 max-w-xs">If stuck: click "Force Start Scanning" or try "Try Capture Now". Ensure camera permission is granted.</p>
-              </div>
-            )}
-
-            {!isScanning && !scannedData && !isLoading && !error && (
-              <div className="flex flex-col items-center space-y-4 text-center">
-                <div className="w-32 h-32 bg-gray-200 rounded-lg flex items-center justify-center">
-                  <Camera size={48} className="text-gray-400" />
-                </div>
-                <p className="text-gray-600 mb-4">
-                  Position the QR code within the scanning area
-                </p>
-                <button
-                  onClick={startCamera}
-                  className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg flex items-center space-x-2 transition-colors"
-                >
-                  <Camera size={18} />
-                  <span>Start Camera</span>
-                </button>
-              </div>
-            )}
-
-            {(isScanning || (stream && !isLoading)) && (
-              <div className="flex flex-col items-center space-y-4 w-full max-w-md">
-                <div className="relative w-full aspect-square bg-black rounded-lg overflow-hidden">
-                  <video
-                    ref={webcamRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    className="w-full h-full object-cover"
-                    style={{ transform: 'scaleX(-1)' }}
-                    onLoadedMetadata={() => appendDebug(`Video metadata loaded: ${webcamRef.current?.videoWidth}x${webcamRef.current?.videoHeight}`)}
-                    onCanPlay={() => appendDebug('Video can play')}
-                    onPlaying={() => appendDebug('Video playing')}
-                    onError={(e) => appendDebug(`Video error: ${e.currentTarget.error?.message || 'Unknown'}`)}
+          )}
+          {error && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-600/80 text-white gap-4 p-6 text-center">
+              <p className="font-medium">{error}</p>
+              <button
+                onClick={handleRetry}
+                className="bg-white text-red-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-100"
+              >Retry</button>
+            </div>
+          )}
+          {/* Decorative scanning frame overlay */}
+          <AnimatePresence>
+            {!isLoading && !error && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="pointer-events-none absolute inset-0 flex items-center justify-center"
+              >
+                <div className="relative w-[70%] aspect-square">
+                  <div className="absolute inset-0 border-[3px] rounded-2xl border-white/60 shadow-[0_0_0_3000px_rgba(0,0,0,0.25)]" />
+                  <motion.div
+                    className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-transparent via-blue-400 to-transparent"
+                    animate={{ y: ['0%', '100%', '0%'] }}
+                    transition={{ duration: 2.2, repeat: Infinity, ease: 'linear' }}
                   />
-                  
-                  {/* Scanning overlay */}
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="w-48 h-48 border-2 border-white rounded-lg relative">
-                      <div className="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-blue-500 rounded-tl-lg"></div>
-                      <div className="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-blue-500 rounded-tr-lg"></div>
-                      <div className="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-blue-500 rounded-bl-lg"></div>
-                      <div className="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-blue-500 rounded-br-lg"></div>
-                      
-                      {/* Scanning animation line */}
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="w-40 h-0.5 bg-blue-500 animate-pulse"></div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Scan attempts indicator */}
-                  <div className="absolute bottom-4 left-4 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-sm">
-                    Attempts: {scanAttempts}
-                  </div>
                 </div>
-                
-                <p className="text-gray-600 text-center">
-                  Hold QR code steady within the frame
-                </p>
-                
-                <div className="text-xs text-gray-500 text-center">
-                  <p>• Ensure good lighting</p>
-                  <p>• Hold QR code 6-12 inches from camera</p>
-                  <p>• Keep QR code flat and visible</p>
-                </div>
-              </div>
+              </motion.div>
             )}
+          </AnimatePresence>
+        </div>
 
-            {scannedData && (
-              <div className="flex flex-col items-center space-y-4 text-center">
-                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
-                  <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
-                    <span className="text-white font-bold text-sm">✓</span>
-                  </div>
-                </div>
-                <div>
-                  <h4 className="text-lg font-semibold text-gray-800 mb-2">
-                    QR Code Scanned Successfully!
-                  </h4>
-                  <div className="bg-gray-100 p-3 rounded-lg mb-4 max-w-sm break-all">
-                    <p className="text-sm font-mono text-gray-700">{scannedData}</p>
-                  </div>
-                  <p className="text-sm text-gray-500">
-                    Attendance recorded for {event.title}
-                  </p>
-                </div>
-                <div className="flex space-x-3">
-                  <button
-                    onClick={() => {
-                      setScannedData(null);
-                      setScanAttempts(0);
-                      startCamera();
-                    }}
-                    className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors"
-                  >
-                    Scan Another
-                  </button>
-                  <button
-                    onClick={onBack}
-                    className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition-colors"
-                  >
-                    Done
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {error && (
-              <div className="flex flex-col items-center space-y-4 text-center">
-                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center">
-                  <AlertCircle size={32} className="text-red-500" />
-                </div>
-                <div>
-                  <h4 className="text-lg font-semibold text-gray-800 mb-2">
-                    Camera Error
-                  </h4>
-                  <p className="text-red-600 mb-4 max-w-sm">{error}</p>
-                </div>
-                <button
-                  onClick={startCamera}
-                  className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors"
-                >
-                  Try Again
+        {/* Scan result panel */}
+        <div className="bg-white/80 backdrop-blur-xl rounded-2xl border border-white/60 shadow-lg p-6 flex flex-col overflow-hidden">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-800">Result</h2>
+            {scannedText && (
+              <div className="flex items-center gap-2">
+                <button onClick={() => setShowRaw(r => !r)} className="text-xs px-3 py-1 rounded-md bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium">
+                  {showRaw ? 'Hide JSON' : 'Show JSON'}
                 </button>
+                <button onClick={copyRaw} className="text-xs px-3 py-1 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-medium">Copy</button>
               </div>
             )}
           </div>
-
-          {/* Instructions */}
-          <div className="mt-6 p-4 bg-blue-50 rounded-lg flex-shrink-0">
-            <h4 className="font-medium text-blue-800 mb-2">QR Scanner Instructions:</h4>
-            <ul className="text-sm text-blue-700 space-y-1">
-              <li>• Ensure bright, even lighting for optimal scanning</li>
-              <li>• Hold the QR code 6-12 inches from the camera</li>
-              <li>• Keep the QR code flat and fully visible within the frame</li>
-              <li>• The scanner automatically detects and reads QR codes</li>
-              <li>• Make sure the QR code is not damaged or distorted</li>
-            </ul>
-            {debugInfo.length > 0 && (
-              <details className="mt-4 text-xs">
-                <summary className="cursor-pointer select-none text-blue-700">Debug Info</summary>
-                <pre className="mt-2 max-h-48 overflow-auto bg-white/60 p-2 rounded border border-blue-200 whitespace-pre-wrap">{debugInfo.join('\n')}</pre>
-              </details>
+          <div className="flex-1 overflow-auto space-y-6 pr-1">
+            {!scannedText && (
+              <p className="text-sm text-gray-500">Align the QR code within the frame to scan.</p>
+            )}
+            {scannedText && isJson && (
+              <div>
+                <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-2">Parsed Fields</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {flattened.map(item => (
+                    <div key={item.key} className="flex flex-col bg-gray-50/70 rounded-lg border border-gray-200 p-3">
+                      <span className="text-[11px] uppercase tracking-wide text-gray-500 font-medium mb-1 break-all">{item.key}</span>
+                      <span className="text-sm text-gray-800 break-words font-medium">{item.value || '\u00a0'}</span>
+                    </div>
+                  ))}
+                  {flattened.length === 0 && (
+                    <div className="text-xs text-gray-500">(Empty Object)</div>
+                  )}
+                </div>
+              </div>
+            )}
+            {scannedText && !isJson && (
+              <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-md p-3 text-xs">
+                Content is not valid JSON. Displaying raw text below.
+              </div>
+            )}
+            {scannedText && showRaw && (
+              <div>
+                <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-2">Raw {isJson ? 'JSON' : 'Data'}</h3>
+                <motion.pre
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="whitespace-pre-wrap break-words text-xs leading-relaxed font-mono text-gray-800 bg-gray-900/90 text-gray-100 rounded-lg p-4 border border-gray-800 shadow-inner max-h-64 overflow-auto"
+                >{isJson ? JSON.stringify(parsedJson, null, 2) : scannedText}</motion.pre>
+              </div>
             )}
           </div>
+          {scannedText && (
+            <div className="mt-4 flex flex-wrap gap-3">
+              <button
+                onClick={() => { setScannedText(null); setParsedJson(null); setIsJson(false); }}
+                className="px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700"
+              >Scan Another</button>
+              <button
+                onClick={() => { onClose(); }}
+                className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-200 text-gray-800 hover:bg-gray-300"
+              >Close</button>
+            </div>
+          )}
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 };
 
+export default QRScannerPage;
