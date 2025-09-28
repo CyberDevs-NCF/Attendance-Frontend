@@ -210,19 +210,23 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
           setIsLoading(false);
         }
 
-        // Fallback: if after 2500ms still loading, force display + stop loading spinner
+        // Fallback: if after 3500ms still loading, force display + stop loading spinner
         setTimeout(() => {
           if (v && isLoading) {
-            appendDebug(`Fallback timeout fired. readyState=${v.readyState}`);
-            if (v.readyState >= 2) {
+            appendDebug(`Fallback timeout fired. readyState=${v.readyState} videoWidth=${v.videoWidth} videoHeight=${v.videoHeight}`);
+            if (v.videoWidth > 0 && v.videoHeight > 0) {
+              appendDebug('Video has dimensions, forcing start');
               setIsLoading(false);
               setIsScanning(true);
-            } else if (!error) {
-              setError('Camera seems stuck initializing. Try switching camera or checking permissions.');
-              setIsLoading(false);
+              if (!scanIntervalRef.current) {
+                scanIntervalRef.current = setInterval(captureAndScan, 300);
+              }
+            } else {
+              appendDebug('Video has no dimensions, showing manual controls');
+              // Keep in loading state but the UI will show manual buttons
             }
           }
-        }, 2500);
+        }, 3500);
       }
     } catch (err: any) {
       appendDebug('getUserMedia error: ' + (err?.name || 'Err') + ' ' + (err?.message || ''));
@@ -425,11 +429,51 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
           <div className="flex-1 flex flex-col items-center justify-center">
             {isLoading && !error && (
               <div className="flex flex-col items-center space-y-4 text-center">
-                <div className="w-32 h-32 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <Camera size={48} className="text-blue-500 animate-pulse" />
-                </div>
+                {/* Show video element even during loading */}
+                {webcamRef.current?.srcObject && (
+                  <div className="relative w-full max-w-md aspect-square bg-black rounded-lg overflow-hidden mb-4">
+                    <video
+                      ref={webcamRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className="w-full h-full object-cover"
+                      style={{ transform: 'scaleX(-1)' }}
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30">
+                      <div className="text-white text-sm bg-black bg-opacity-50 px-3 py-1 rounded">
+                        Initializing camera...
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {!webcamRef.current?.srcObject && (
+                  <div className="w-32 h-32 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <Camera size={48} className="text-blue-500 animate-pulse" />
+                  </div>
+                )}
                 <p className="text-gray-600">Starting camera...</p>
-                <p className="text-xs text-gray-400 max-w-xs">If this takes longer than a few seconds: ensure you accepted the permission prompt, no other app is using the camera, and try Refresh or switch device.</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      setIsLoading(false);
+                      setIsScanning(true);
+                      if (!scanIntervalRef.current) {
+                        scanIntervalRef.current = setInterval(captureAndScan, 300);
+                      }
+                    }}
+                    className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm"
+                  >
+                    Force Start Scanning
+                  </button>
+                  <button
+                    onClick={captureAndScan}
+                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
+                  >
+                    Try Capture Now
+                  </button>
+                </div>
+                <p className="text-xs text-gray-400 max-w-xs">If stuck: click "Force Start Scanning" or try "Try Capture Now". Ensure camera permission is granted.</p>
               </div>
             )}
 
