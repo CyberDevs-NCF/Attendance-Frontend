@@ -17,6 +17,12 @@ interface QRScannerPageProps {
   onStudentScanned?: (studentId: string) => void;
 }
 
+// Add a type for media devices we care about
+interface CameraDevice {
+  deviceId: string;
+  label: string;
+}
+
 export const QRScannerPage: React.FC<QRScannerPageProps> = ({ 
   event, 
   onBack, 
@@ -27,12 +33,40 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [scannedData, setScannedData] = useState<string | null>(null);
   const [scanAttempts, setScanAttempts] = useState(0);
+  const [devices, setDevices] = useState<CameraDevice[]>([]);
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string>('');
+  const [enumerationError, setEnumerationError] = useState<string | null>(null);
+  const [insecureContext, setInsecureContext] = useState<boolean>(false);
   
   const webcamRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const enumerateVideoDevices = useCallback(async () => {
+    try {
+      setEnumerationError(null);
+      const all = await navigator.mediaDevices.enumerateDevices();
+      const vids = all.filter(d => d.kind === 'videoinput').map((d, idx) => ({
+        deviceId: d.deviceId,
+        label: d.label || `Camera ${idx + 1}`
+      }));
+      setDevices(vids);
+      if (vids.length > 0 && !selectedDeviceId) {
+        setSelectedDeviceId(vids[0].deviceId);
+      }
+      if (vids.length === 0) {
+        setEnumerationError('No video input devices detected.');
+      }
+    } catch (err: any) {
+      setEnumerationError('Unable to list cameras: ' + (err?.message || 'Unknown error'));
+    }
+  }, [selectedDeviceId]);
+
+  useEffect(() => {
+    setInsecureContext(!window.isSecureContext && window.location.hostname !== 'localhost');
+  }, []);
 
   const stopCamera = useCallback(() => {
     if (stream) {
@@ -127,49 +161,62 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
       if (stream) stopCamera();
 
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error("Camera not supported in this browser");
+        throw new Error('Camera not supported in this browser');
       }
 
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { 
-          facingMode: "environment", // Prefer rear-facing camera
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        }
-      });
+      const constraints: MediaStreamConstraints = {
+        video: selectedDeviceId ? { deviceId: { exact: selectedDeviceId } } : { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false
+      };
 
+      const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
       if (webcamRef.current) {
         webcamRef.current.srcObject = mediaStream;
-
         try {
           await webcamRef.current.play();
           setStream(mediaStream);
           setIsScanning(true);
           setIsLoading(false);
-
-          // Start scanning interval
-          scanIntervalRef.current = setInterval(captureAndScan, 300); // Scan every 300ms
-          
+          // Refresh device labels (after permission granted labels appear)
+          enumerateVideoDevices();
+          scanIntervalRef.current = setInterval(captureAndScan, 300);
         } catch (playError) {
-          console.error("Video play error:", playError);
-          setError("Failed to start camera playback");
+          console.error('Video play error:', playError);
+          setError('Failed to start camera playback');
           setIsLoading(false);
         }
       }
     } catch (err: any) {
-      console.error("Camera access error:", err);
-      let errorMessage = "Unable to access camera. ";
-      if (err.name === "NotAllowedError") {
-        errorMessage += "Please grant camera permissions and try again.";
-      } else if (err.name === "NotFoundError") {
-        errorMessage += "No camera found on this device.";
+      console.error('Camera access error:', err);
+      let errorMessage = `Unable to access camera (${err.name || 'Error'}). `;
+      if (err.name === 'NotAllowedError' || err.name === 'SecurityError') {
+        errorMessage += 'Permission denied. Check browser site settings and allow camera.';
+      } else if (err.name === 'NotFoundError' || err.name === 'OverconstrainedError') {
+        errorMessage += 'Requested camera not found. Try a different device.';
+      } else if (err.name === 'NotReadableError') {
+        errorMessage += 'Camera is in use by another application.';
       } else {
-        errorMessage += "Please check your camera settings and try again.";
+        errorMessage += 'Please check camera settings and try again.';
       }
       setError(errorMessage);
       setIsLoading(false);
     }
-  }, [stream, stopCamera, captureAndScan]);
+  }, [stream, stopCamera, captureAndScan, selectedDeviceId, enumerateVideoDevices]);
+
+  // Re-start when selected device changes (if already scanning)
+  useEffect(() => {
+    if (selectedDeviceId && isScanning) {
+      startCamera();
+    }
+  }, [selectedDeviceId]);
+
+  useEffect(() => {
+    enumerateVideoDevices();
+    startCamera();
+    return () => {
+      stopCamera();
+    };
+  }, []); // Empty dependency array to avoid infinite re-renders
 
   // Handle QR upload (fallback when camera not available)
   const handleUploadClick = useCallback(() => {
@@ -243,34 +290,53 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
     }
   }, [onStudentScanned, stopCamera]);
 
-  useEffect(() => {
-    // Auto-start camera when component mounts
-    startCamera();
-    
-    return () => {
-      // Cleanup camera on component unmount
-      stopCamera();
-    };
-  }, []); // Empty dependency array to avoid infinite re-renders
-
   return (
     <div className="text-gray-800 h-screen bg-gray-100 p-6 flex flex-col">
       {/* Hidden canvas for image processing */}
       <canvas ref={canvasRef} style={{ display: 'none' }} />
       
       {/* Header */}
-      <div className="flex justify-between items-center mb-6 flex-shrink-0">
-        <button
-          onClick={onBack}
-          className="flex items-center text-gray-700 hover:text-gray-900 transition-colors"
-        >
+      <div className="flex justify-between items-center mb-6 flex-shrink-0 gap-4 flex-wrap">
+        <button onClick={onBack} className="flex items-center text-gray-700 hover:text-gray-900 transition-colors">
           <ArrowLeft size={20} className="mr-2" />
           <span className="text-lg font-medium">Back</span>
         </button>
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center gap-3 flex-wrap">
           <h1 className="text-xl font-semibold text-gray-800">Scan Student QR Code</h1>
+          <div className="flex items-center gap-2">
+            <select
+              value={selectedDeviceId}
+              onChange={e => setSelectedDeviceId(e.target.value)}
+              className="px-2 py-1 border rounded text-sm bg-white"
+              title="Select Camera"
+            >
+              {devices.map(d => (
+                <option key={d.deviceId} value={d.deviceId}>{d.label}</option>
+              ))}
+              {devices.length === 0 && <option value="">No Cameras</option>}
+            </select>
+            <button
+              onClick={enumerateVideoDevices}
+              type="button"
+              className="text-xs px-2 py-1 border rounded bg-white hover:bg-gray-50"
+              title="Refresh camera list"
+            >Refresh</button>
+          </div>
+          <button
+            onClick={() => { if (isScanning) { stopCamera(); } else { startCamera(); } }}
+            className={`px-3 py-1.5 rounded text-sm font-medium text-white ${isScanning ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-600 hover:bg-blue-700'}`}
+          >{isScanning ? 'Stop Camera' : 'Start Camera'}</button>
         </div>
       </div>
+
+      {insecureContext && (
+        <div className="mb-4 p-3 rounded bg-yellow-100 border border-yellow-300 text-yellow-900 text-sm">
+          Camera may fail because this page is not served over HTTPS. Use localhost or deploy with HTTPS.
+        </div>
+      )}
+      {enumerationError && (
+        <div className="mb-4 p-3 rounded bg-red-50 border border-red-200 text-red-700 text-sm">{enumerationError}</div>
+      )}
 
       {/* Event Info */}
       <div className="bg-white rounded-lg p-4 shadow-sm mb-6 flex-shrink-0">
