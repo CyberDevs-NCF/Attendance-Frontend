@@ -264,17 +264,20 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
   // Re-start when selected device changes (if already scanning)
   useEffect(() => {
     if (selectedDeviceId && isScanning) {
+      appendDebug(`Device changed to: ${selectedDeviceId}, restarting camera`);
       startCamera();
     }
-  }, [selectedDeviceId]);
+  }, [selectedDeviceId, startCamera, isScanning, appendDebug]);
 
   useEffect(() => {
+    appendDebug('QRScannerPage component mounted');
     enumerateVideoDevices();
     startCamera();
     return () => {
+      appendDebug('QRScannerPage component unmounting');
       stopCamera();
     };
-  }, []); // Empty dependency array to avoid infinite re-renders
+  }, [enumerateVideoDevices, startCamera, stopCamera, appendDebug]); // Empty dependency array to avoid infinite re-renders
 
   // Handle QR upload (fallback when camera not available)
   const handleUploadClick = useCallback(() => {
@@ -364,7 +367,10 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
           <div className="flex items-center gap-2">
             <select
               value={selectedDeviceId}
-              onChange={e => setSelectedDeviceId(e.target.value)}
+              onChange={e => {
+                appendDebug(`Camera selection changed to: ${e.target.value}`);
+                setSelectedDeviceId(e.target.value);
+              }}
               className="px-2 py-1 border rounded text-sm bg-white"
               title="Select Camera"
             >
@@ -385,7 +391,7 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
           </div>
           <button
             onClick={() => { 
-              appendDebug(`${isScanning ? 'Stop' : 'Start'} Camera button clicked`);
+              appendDebug(`${isScanning ? 'Stop' : 'Start'} Camera button clicked (current state: isScanning=${isScanning}, isLoading=${isLoading})`);
               if (isScanning) { 
                 stopCamera(); 
               } else { 
@@ -395,6 +401,20 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
             className={`px-3 py-1.5 rounded text-sm font-medium text-white ${isScanning ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-600 hover:bg-blue-700'}`}
           >{isScanning ? 'Stop Camera' : 'Start Camera'}</button>
         </div>
+      </div>
+
+      {/* Debug Panel - Always Visible for troubleshooting */}
+      <div className="mb-4 p-3 bg-gray-50 rounded border text-xs">
+        <div className="flex justify-between items-center mb-2">
+          <strong>Debug Status:</strong>
+          <span>Devices: {devices.length} | Selected: {selectedDeviceId ? 'Yes' : 'No'} | Loading: {isLoading ? 'Yes' : 'No'} | Scanning: {isScanning ? 'Yes' : 'No'}</span>
+        </div>
+        {debugInfo.length > 0 && (
+          <details className="mt-2">
+            <summary className="cursor-pointer select-none font-medium">View Debug Log ({debugInfo.length} entries)</summary>
+            <pre className="mt-2 max-h-32 overflow-auto bg-white p-2 rounded border whitespace-pre-wrap text-xs">{debugInfo.slice(-10).join('\n')}</pre>
+          </details>
+        )}
       </div>
 
       {insecureContext && (
