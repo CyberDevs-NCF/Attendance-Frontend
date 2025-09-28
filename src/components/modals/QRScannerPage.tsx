@@ -208,25 +208,37 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
         v.addEventListener('loadedmetadata', onLoadedMetadata, { once: true });
         v.addEventListener('canplay', onCanPlay, { once: true });
 
-        try {
-          await v.play();
-          appendDebug(`video.play() resolved - dimensions: ${v.videoWidth}x${v.videoHeight}, readyState: ${v.readyState}`);
-          setStream(mediaStream);
-          setIsScanning(true);
-          setIsLoading(false);
-          // Only enumerate devices once to avoid loops
-          if (devices.length === 0) {
-            enumerateVideoDevices();
+        // Set up video element with better error handling
+        const playVideo = async () => {
+          try {
+            appendDebug(`Attempting video.play() - current readyState: ${v.readyState}`);
+            await v.play();
+            appendDebug(`video.play() resolved - dimensions: ${v.videoWidth}x${v.videoHeight}, readyState: ${v.readyState}`);
+          } catch (playError: any) {
+            appendDebug('video.play() rejected: ' + playError?.message);
+            // Try without await
+            v.play().catch(() => {
+              appendDebug('Second play attempt also failed');
+            });
           }
+        };
+
+        // Force video setup regardless of play success
+        setStream(mediaStream);
+        setIsScanning(true);
+        setIsLoading(false);
+        
+        // Start scanning interval regardless of video display
+        if (!scanIntervalRef.current) {
           scanIntervalRef.current = setInterval(captureAndScan, 300);
-        } catch (playError: any) {
-          appendDebug('video.play() rejected: ' + playError?.message);
-          // Try to force play anyway
-          setStream(mediaStream);
-          setIsScanning(true);
-          setIsLoading(false);
-          setError('Autoplay blocked - video may not display but try scanning anyway');
-          scanIntervalRef.current = setInterval(captureAndScan, 300);
+        }
+        
+        // Try to play video
+        await playVideo();
+        
+        // Only enumerate devices once to avoid loops
+        if (devices.length === 0) {
+          enumerateVideoDevices();
         }
 
         // Fallback: if after 3500ms still loading, force display + stop loading spinner
@@ -544,7 +556,7 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
               </div>
             )}
 
-            {isScanning && (
+            {(isScanning || (stream && !isLoading)) && (
               <div className="flex flex-col items-center space-y-4 w-full max-w-md">
                 <div className="relative w-full aspect-square bg-black rounded-lg overflow-hidden">
                   <video
