@@ -1,25 +1,32 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Camera, Flashlight, Loader2, RotateCcw, X } from 'lucide-react';
+import { Camera, Flashlight, Loader2, RotateCcw, X, Check, Clock, ChevronDown } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 import type { Html5QrcodeCameraScanConfig, Html5QrcodeResult } from 'html5-qrcode';
 
-// Types for html5-qrcode (library ships its own types, but we narrow for our usage)
+interface AttendeeData {
+  id: string;
+  name: string;
+  block: string;
+  year: string;
+  course: string;
+  email: string;
+}
+
 interface QRScannerPageProps {
   onClose: () => void;
   onScan: (text: string, raw?: Html5QrcodeResult) => void;
+  onApproveAttendee?: (attendee: AttendeeData, time: string, isTimeIn: boolean, period: 'AM' | 'PM') => void;
   headerTitle?: string;
-  // html5-qrcode exposes optional format config but its type may not include property; keep generic any[]
-  allowedFormats?: any[]; // eslint-disable-line @typescript-eslint/no-explicit-any
-  fps?: number; // scan frames per second
+  allowedFormats?: any[];
+  fps?: number;
   qrbox?: number | { width: number; height: number };
-  disableFlip?: boolean; // disable mirrored video
+  disableFlip?: boolean;
 }
 
-// Helper to check torch capability on track
+
 async function toggleTorch(track: MediaStreamTrack, turnOn: boolean): Promise<boolean> {
   try {
-    // Attempt applying constraint; some browsers support this unofficially
     // @ts-ignore: torch constraint not in standard lib yet
     await track.applyConstraints({ advanced: [{ torch: turnOn }] });
     return true;
@@ -31,6 +38,7 @@ async function toggleTorch(track: MediaStreamTrack, turnOn: boolean): Promise<bo
 export const QRScannerPage: React.FC<QRScannerPageProps> = ({
   onClose,
   onScan,
+  onApproveAttendee,
   headerTitle = 'Scan QR Code',
   allowedFormats,
   fps = 10,
@@ -45,26 +53,70 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [torchOn, setTorchOn] = useState(false);
   const mediaTrackRef = useRef<MediaStreamTrack | null>(null);
+  const [scannedData, setScannedData] = useState<AttendeeData | null>(null);
   const [scannedText, setScannedText] = useState<string | null>(null);
-  const [parsedJson, setParsedJson] = useState<unknown | null>(null);
-  const [isJson, setIsJson] = useState(false);
-  const [showRaw, setShowRaw] = useState(true);
+  const [showRaw, setShowRaw] = useState(false);
+  
+  // New states for attendance management
+  const [selectedTime, setSelectedTime] = useState(() => {
+    const now = new Date();
+    return now.toLocaleTimeString('en-US', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      hour12: false 
+    });
+  });
+  const [selectedPeriod, setSelectedPeriod] = useState(() => {
+    const now = new Date();
+    return now.getHours() >= 12 ? 'PM' : 'AM';
+  });
+  const [isTimeIn, setIsTimeIn] = useState(true);
+  const [showApprovalDialog, setShowApprovalDialog] = useState(false);
 
-  // Helper: attempt to parse JSON and set state
   const handleDecoded = useCallback((decodedText: string, rawResult?: Html5QrcodeResult) => {
-    // Avoid re-processing identical scans in rapid succession
     setScannedText(prev => {
-      if (prev === decodedText) return prev; // ignore duplicate
+      if (prev === decodedText) return prev;
       return decodedText;
     });
+    
     try {
-      const obj = JSON.parse(decodedText);
-      setParsedJson(obj);
-      setIsJson(true);
+      const data = JSON.parse(decodedText);
+      console.log('Decoded QR data:', data);
+
+      const block = data.course_year_section || 'N/A';
+      let course = 'N/A';
+      let year = 'N/A';
+
+      if (block && block !== 'N/A') {
+        // Example: "BSCS 1A"
+        const match = block.match(/^([A-Za-z]+)\s*(\d)/);
+        if (match) {
+          course = match[1];   // "BSCS"
+          year = match[2];     // "1"
+        }
+      }
+
+      const attendee: AttendeeData = {
+        id: data.student_id,
+        name: `${data.first_name} ${data.last_name}`,
+        block,
+        course,
+        year,
+        email: data.email || 'N/A',
+      };
+
+      if (attendee.id && attendee.name && attendee.block) {
+        setScannedData(attendee);
+        setShowApprovalDialog(true);
+      } else {
+        setScannedData(null);
+        setError('Invalid QR code format. Missing required attendee information.');
+      }
     } catch {
-      setParsedJson(null);
-      setIsJson(false);
+      setScannedData(null);
+      setError('QR code does not contain valid attendee data.');
     }
+    
     onScan(decodedText, rawResult);
   }, [onScan]);
 
@@ -91,11 +143,10 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
         fps,
         qrbox,
         disableFlip,
-        // Enforce square to avoid letterboxing that can show gray zones
-        // @ts-ignore - aspectRatio supported by library though not typed
+        // @ts-ignore - aspectRatio supported by library
         aspectRatio: 1.0,
       };
-      // Some builds allow specifying supported formats via experimental property; ignore if unsupported
+      
       if (allowedFormats) {
         // @ts-ignore - optional experimental property
         config.formatsToSupport = allowedFormats;
@@ -110,15 +161,12 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
         (scanError) => { void scanError; }
       );
 
-      // Try to capture track for torch
-      // @ts-expect-error private field _localMediaStream may not be public
+      // @ts-expect-error private field
       const stream: MediaStream | undefined = scannerRef.current?._localMediaStream;
       mediaTrackRef.current = stream?.getVideoTracks()?.[0] || null;
 
-      // Post-start styling adjustments to remove any remaining gray overlay space / shaded regions
       const containerEl = document.getElementById(containerIdRef.current);
       if (containerEl) {
-        // Hide default shaded regions that html5-qrcode injects
         containerEl.querySelectorAll('.qr-shaded-region').forEach(el => {
           (el as HTMLElement).style.display = 'none';
         });
@@ -137,9 +185,8 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [allowedFormats, disableFlip, fps, onScan, qrbox]);
+  }, [allowedFormats, disableFlip, fps, handleDecoded, qrbox]);
 
-  // Enumerate cameras on mount
   useEffect(() => {
     let mounted = true;
     Html5Qrcode.getCameras()
@@ -147,7 +194,6 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
         if (!mounted) return;
         const mapped = devices.map(d => ({ id: d.id, label: d.label || `Camera ${d.id}` }));
         setCameras(mapped);
-        // Prefer environment facing camera if label hints
         const preferred = mapped.find(c => /back|rear|environment/i.test(c.label)) || mapped[0];
         if (preferred) {
           setCameraId(preferred.id);
@@ -157,7 +203,6 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
     return () => { mounted = false; };
   }, []);
 
-  // Start when cameraId changes
   useEffect(() => {
     if (cameraId) {
       startScanner(cameraId);
@@ -165,7 +210,6 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
     return () => { void stopScanner(); };
   }, [cameraId, startScanner, stopScanner]);
 
-  // Clean up on unmount
   useEffect(() => {
     return () => { void stopScanner(); };
   }, [stopScanner]);
@@ -177,41 +221,31 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
   };
 
   const handleRetry = () => {
+    setShowApprovalDialog(false);
+    setScannedData(null);
+    setScannedText(null);
+    setError(null);
     if (cameraId) startScanner(cameraId);
   };
 
-  const flattenObject = (obj: unknown, prefix = ''): { key: string; value: string }[] => {
-    if (obj === null) return [{ key: prefix || '(null)', value: 'null' }];
-    if (typeof obj !== 'object') {
-      return [{ key: prefix || 'value', value: String(obj) }];
-    }
-    const entries: { key: string; value: string }[] = [];
-    for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
-      const newKey = prefix ? `${prefix}.${k}` : k;
-      if (typeof v === 'object' && v !== null) {
-        if (Array.isArray(v)) {
-          if (v.every(item => typeof item !== 'object')) {
-            entries.push({ key: newKey, value: v.map(item => String(item)).join(', ') });
-          } else {
-            v.forEach((item, idx) => {
-              entries.push(...flattenObject(item, `${newKey}[${idx}]`));
-            });
-          }
-        } else {
-          entries.push(...flattenObject(v, newKey));
-        }
-      } else {
-        entries.push({ key: newKey, value: String(v) });
-      }
-    }
-    return entries;
-  };
+  const handleApprove = () => {
+  if (scannedData && onApproveAttendee) {
+    const now = new Date();
+    const hours = now.getHours() % 12 || 12;
+    const minutes = now.getMinutes().toString().padStart(2, '0');
+    const timeWithPeriod = `${hours}:${minutes} ${selectedPeriod}`;
 
-  const flattened = isJson && parsedJson ? flattenObject(parsedJson) : [];
+    // Pass only 3 arguments
+    onApproveAttendee(scannedData, timeWithPeriod, isTimeIn,  selectedPeriod as 'AM' | 'PM');
+    onClose();
+  }
+};
 
-  const copyRaw = () => {
-    if (!scannedText) return;
-    navigator.clipboard.writeText(scannedText).catch(() => {/* ignore */});
+
+
+
+  const handleDeny = () => {
+    handleRetry();
   };
 
   const handleSwitchCamera = (id: string) => {
@@ -219,6 +253,18 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
       setTorchOn(false);
       setCameraId(id);
     }
+  };
+
+  const generateTimeOptions = () => {
+    const options = [];
+    for (let h = 1; h <= 12; h++) {
+      for (let m = 0; m < 60; m += 15) {
+        const hour = h.toString().padStart(2, '0');
+        const minute = m.toString().padStart(2, '0');
+        options.push(`${hour}:${minute}`);
+      }
+    }
+    return options;
   };
 
   return (
@@ -259,17 +305,59 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
         </div>
         <button
           onClick={handleTorchToggle}
-            disabled={!mediaTrackRef.current}
+          disabled={!mediaTrackRef.current}
           className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <Flashlight size={16} /> {torchOn ? 'Torch Off' : 'Torch On'}
         </button>
-        <button
-          onClick={handleRetry}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white hover:bg-gray-50"
-        >
-          <RotateCcw size={16} /> Restart
-        </button>
+
+        {/* {AM/PM Toggle} */}
+        <div className="flex items-center gap-2 ml-auto">
+          <button
+          onClick={() => setSelectedPeriod('AM')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            selectedPeriod === 'AM' 
+              ? 'bg-blue-600 text-white' 
+              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+          }`}
+          >
+            AM
+          </button>
+          <button
+            onClick={() => setSelectedPeriod('PM')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              selectedPeriod === 'PM' 
+                ? 'bg-blue-600 text-white' 
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            PM
+          </button>
+        </div>
+        
+        {/* Time In/Out Toggle */}
+        <div className="flex items-center gap-2 ml-auto">
+          <button
+            onClick={() => setIsTimeIn(true)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              isTimeIn 
+                ? 'bg-green-600 text-white' 
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            Time In
+          </button>
+          <button
+            onClick={() => setIsTimeIn(false)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              !isTimeIn 
+                ? 'bg-red-600 text-white' 
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            Time Out
+          </button>
+        </div>
       </div>
 
       {/* Scanner container */}
@@ -282,7 +370,7 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
               <p className="text-sm">Starting camera...</p>
             </div>
           )}
-          {error && (
+          {error && !showApprovalDialog && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-600/80 text-white gap-4 p-6 text-center">
               <p className="font-medium">{error}</p>
               <button
@@ -291,9 +379,10 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
               >Retry</button>
             </div>
           )}
-          {/* Decorative scanning frame overlay */}
+          
+          {/* Scanning frame overlay */}
           <AnimatePresence>
-            {!isLoading && !error && (
+            {!isLoading && !error && !showApprovalDialog && (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -313,65 +402,58 @@ export const QRScannerPage: React.FC<QRScannerPageProps> = ({
           </AnimatePresence>
         </div>
 
-        {/* Scan result panel */}
+        {/* Result/Approval panel */}
         <div className="bg-white/80 backdrop-blur-xl rounded-2xl border border-white/60 shadow-lg p-6 flex flex-col overflow-hidden">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-800">Result</h2>
-            {scannedText && (
-              <div className="flex items-center gap-2">
-                <button onClick={() => setShowRaw(r => !r)} className="text-xs px-3 py-1 rounded-md bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium">
-                  {showRaw ? 'Hide JSON' : 'Show JSON'}
-                </button>
-                <button onClick={copyRaw} className="text-xs px-3 py-1 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-medium">Copy</button>
-              </div>
-            )}
-          </div>
-          <div className="flex-1 overflow-auto space-y-6 pr-1">
-            {!scannedText && (
-              <p className="text-sm text-gray-500">Align the QR code within the frame to scan.</p>
-            )}
-            {scannedText && isJson && (
-              <div>
-                <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-2">Parsed Fields</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {flattened.map(item => (
-                    <div key={item.key} className="flex flex-col bg-gray-50/70 rounded-lg border border-gray-200 p-3">
-                      <span className="text-[11px] uppercase tracking-wide text-gray-500 font-medium mb-1 break-all">{item.key}</span>
-                      <span className="text-sm text-gray-800 break-words font-medium">{item.value || '\u00a0'}</span>
-                    </div>
-                  ))}
-                  {flattened.length === 0 && (
-                    <div className="text-xs text-gray-500">(Empty Object)</div>
-                  )}
+          {showApprovalDialog && scannedData ? (
+            <div className="h-full flex flex-col">
+              <h2 className="text-lg font-semibold text-gray-800 mb-4">Approve Attendance</h2>
+              
+              {/* Attendee Info */}
+              <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-3">Student Information</h3>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">ID:</span>
+                    <span className="text-sm font-medium text-gray-800">{scannedData.id}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Name:</span>
+                    <span className="text-sm font-medium text-gray-800">{scannedData.name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Block:</span>
+                    <span className="text-sm font-medium text-gray-800">{scannedData.block}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Email:</span>
+                    <span className="text-sm font-medium text-gray-800">{scannedData.email}</span>
+                  </div>
                 </div>
               </div>
-            )}
-            {scannedText && !isJson && (
-              <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-md p-3 text-xs">
-                Content is not valid JSON. Displaying raw text below.
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 mt-auto">
+                <button
+                  onClick={handleApprove}
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg flex items-center justify-center gap-2 font-medium transition-colors"
+                >
+                  <Check size={20} />
+                  Approve
+                </button>
+                <button
+                  onClick={handleDeny}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg flex items-center justify-center gap-2 font-medium transition-colors"
+                >
+                  <X size={20} />
+                  Deny
+                </button>
               </div>
-            )}
-            {scannedText && showRaw && (
-              <div>
-                <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-2">Raw {isJson ? 'JSON' : 'Data'}</h3>
-                <motion.pre
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="whitespace-pre-wrap break-words text-xs leading-relaxed font-mono text-gray-800 bg-gray-900/90 text-gray-100 rounded-lg p-4 border border-gray-800 shadow-inner max-h-64 overflow-auto"
-                >{isJson ? JSON.stringify(parsedJson, null, 2) : scannedText}</motion.pre>
-              </div>
-            )}
-          </div>
-          {scannedText && (
-            <div className="mt-4 flex flex-wrap gap-3">
-              <button
-                onClick={() => { setScannedText(null); setParsedJson(null); setIsJson(false); }}
-                className="px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700"
-              >Scan Another</button>
-              <button
-                onClick={() => { onClose(); }}
-                className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-200 text-gray-800 hover:bg-gray-300"
-              >Close</button>
+            </div>
+          ) : (
+            <div className="h-full flex flex-col justify-center items-center text-center">
+              <Camera className="text-gray-400 mb-4" size={48} />
+              <p className="text-gray-600">Position the QR code within the frame to scan</p>
+              <p className="text-sm text-gray-500 mt-2">Currently in <span className="font-medium">{isTimeIn ? 'Time In' : 'Time Out'}</span> mode</p>
             </div>
           )}
         </div>
