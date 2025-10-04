@@ -192,7 +192,7 @@ const [showQRScanner, setShowQRScanner] = useState(false);
                     animate={{ opacity: 1 }}
                     className="text-white text-lg text-center whitespace-nowrap tracking-wide"
                   >
-                    Hello! {user.name}
+                    Hello! {user.email}
                   </motion.p>
                 </div>
               )}

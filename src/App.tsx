@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import LoginForm from "./components/LoginForm";
 import SignupForm from "./components/SignupForm";
 import Dashboard from "./components/Dashboard";
+import axios from "axios";
 
 // Types
 interface User {
@@ -26,21 +27,17 @@ const App: React.FC = () => {
   const [loginLoading, setLoginLoading] = useState<boolean>(false);
   const [loginErrors, setLoginErrors] = useState<LoginFormErrors>({});
 
-  // Mock authentication
-  const authenticateUser = async (email: string, password: string): Promise<User | null> => {
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+   useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (token) {
+      setIsAuthenticated(true);
+    }
+  }, []);
 
-    //Add your user data here
-    const mockUsers = [
-      { email: "admin@ncf.edu.ph", password: "admin123", name: "Jovanny De Leon" },
-    ];
-
-    const found = mockUsers.find((u) => u.email === email && u.password === password);
-    return found ? { email: found.email, name: found.name } : null;
-  };
 
   // Handle login
   const handleLogin = async (data: LoginFormData) => {
+    console.log("Login data received in App:", data);
     setLoginLoading(true);
     setLoginErrors({});
 
@@ -53,18 +50,28 @@ const App: React.FC = () => {
       setLoginLoading(false);
       return;
     }
+    
 
-    const authenticatedUser = await authenticateUser(data.email, data.password);
-
-    if (authenticatedUser) {
-      setIsAuthenticated(true);
-      setUser(authenticatedUser);
-    } else {
-      setLoginErrors({
-        email: "Invalid email or password",
-        password: "Invalid email or password",
-      });
+        try {
+  const res = await axios.post('http://localhost:3000/api/auth/login', data, {
+    headers: {
+      'Content-Type': 'application/json' // use json instead of x-www-form-urlencoded unless your backend requires it
     }
+  });
+
+  setIsAuthenticated(true);
+  setUser({ email: res.data.email, name: res.data.name ?? res.data.email });
+  // ✅ set user object
+  console.log('Login successful', res.data);
+
+  localStorage.setItem("token", res.data.token);
+} catch (error) {
+  setLoginErrors({
+    email: "Invalid email or password",
+    password: "Invalid email or password",
+  });
+  console.error('Login failed', error);
+}
 
     setLoginLoading(false);
   };
