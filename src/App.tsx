@@ -86,6 +86,7 @@ const App: React.FC = () => {
   };
 
   const handleLogout = () => {
+    localStorage.clear();
     setIsAuthenticated(false);
     setUser(null);
   };

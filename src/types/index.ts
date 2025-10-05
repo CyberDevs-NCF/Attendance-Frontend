@@ -42,3 +42,8 @@ export interface Theme {
   icon: string;
   active: boolean;
 }
+
+export const getUserFromLocalStorage = (): User => ({
+  email: localStorage.getItem("email") ?? "",
+  fullname: localStorage.getItem("fullName") ?? "",
+});

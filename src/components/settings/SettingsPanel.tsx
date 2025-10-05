@@ -1,26 +1,33 @@
-import React from 'react';
-import { motion } from 'framer-motion';
-import type { User } from '../../types';
-import { THEMES } from '../../utils/constants';
+import React from "react";
+import { motion } from "framer-motion";
+import type { User } from "../../types";
+import { THEMES } from "../../utils/constants";
 
 interface SettingsPanelProps {
   user: User;
   onLogout: () => void;
 }
 
-export const SettingsPanel: React.FC<SettingsPanelProps> = ({ user, onLogout }) => {
+export const SettingsPanel: React.FC<SettingsPanelProps> = ({
+  onLogout,
+}) => {
   return (
     <div className="w-[90%] max-w-5xl mx-auto">
-
       {/* Header Section */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 p-6 bg-white bg-opacity-10 backdrop-blur-md rounded-2xl border border-white border-opacity-20">
         <div className="flex items-center space-x-4">
           <div className="w-16 h-16 bg-teal-500 rounded-full flex items-center justify-center">
-            <span className="text-2xl font-medium text-white">{user.name.charAt(0)}</span>
+            <span className="text-2xl font-medium text-white">
+              {localStorage.getItem("fullName")?.charAt(0) ?? ""}
+            </span>
           </div>
           <div>
-            <h1 className="text-blue text-2xl font-semibold">{user.name}</h1>
-            <p className="text-gray-300 text-sm">{user.email}</p>
+            <h1 className="text-blue text-2xl font-semibold">
+              {localStorage.getItem("fullName") ?? ""}
+            </h1>
+            <p className="text-gray-300 text-sm">
+              {localStorage.getItem("email") ?? ""}
+            </p>
             <p className="text-gray-400 text-xs">Officer</p>
           </div>
         </div>
@@ -40,7 +47,9 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ user, onLogout }) 
           animate={{ opacity: 1, y: 0 }}
           className="bg-white bg-opacity-10 backdrop-blur-md rounded-2xl border border-white border-opacity-20 p-6"
         >
-          <h3 className="text-xl font-semibold text-blue mb-6">Background Theme</h3>
+          <h3 className="text-xl font-semibold text-blue mb-6">
+            Background Theme
+          </h3>
           <div className="space-y-3">
             {THEMES.map((theme) => (
               <div
@@ -72,7 +81,9 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ user, onLogout }) 
           transition={{ delay: 0.1 }}
           className="bg-white bg-opacity-10 backdrop-blur-md rounded-2xl border border-white border-opacity-20 p-6"
         >
-          <h3 className="text-xl font-semibold text-blue mb-6">Account Information</h3>
+          <h3 className="text-xl font-semibold text-blue mb-6">
+            Account Information
+          </h3>
           <div className="space-y-4">
             {/* <div className="flex justify-between items-center py-2">
               <span className="text-gray-300">Username</span>
