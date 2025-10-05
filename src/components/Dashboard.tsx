@@ -4,25 +4,25 @@ import { motion, AnimatePresence } from "framer-motion";
 import AuthBackground from "./AuthBackground";
 
 // Component imports
-import { Modal } from './ui/Modal';
-import { SearchFilter } from './ui/SearchFilter';
-import { EventForm } from './forms/EventForm';
-import { EventDetailsPage } from './modals/EventDetailsPage';
-import { Logo, LogoIcon } from './sidebar/Logo';
-import { Sidebar, SidebarBody, SidebarLinkComponent } from './sidebar/Sidebar';
-import { EventsTable } from './events/EventsTable';
-import { EventsCards } from './events/EventsCards';
-import { SettingsPanel } from './settings/SettingsPanel';
-import { Header } from './layout/Header';
-import QRScannerPage from './modals/QRScannerPage';
-import RegistrationForm from './forms/RegistrationForm';
+import { Modal } from "./ui/Modal";
+import { SearchFilter } from "./ui/SearchFilter";
+import { EventForm } from "./forms/EventForm";
+import { EventDetailsPage } from "./modals/EventDetailsPage";
+import { Logo, LogoIcon } from "./sidebar/Logo";
+import { Sidebar, SidebarBody, SidebarLinkComponent } from "./sidebar/Sidebar";
+import { EventsTable } from "./events/EventsTable";
+import { EventsCards } from "./events/EventsCards";
+import { SettingsPanel } from "./settings/SettingsPanel";
+import { Header } from "./layout/Header";
+import QRScannerPage from "./modals/QRScannerPage";
+import RegistrationForm from "./forms/RegistrationForm";
 
 // Hooks and utilities
-import { useEvents } from '../hooks/useEvents';
-import { NAVIGATION_LINKS, SETTINGS_LINK } from '../utils/constants';
+import { useEvents } from "../hooks/useEvents";
+import { NAVIGATION_LINKS, SETTINGS_LINK } from "../utils/constants";
 
 // Types
-import type { EventsDashboardProps, Event } from '../types';
+import type { EventsDashboardProps, Event } from "../types";
 
 const Dashboard: React.FC<EventsDashboardProps> = ({ user, onLogout }) => {
   // Sidebar state
@@ -30,9 +30,11 @@ const Dashboard: React.FC<EventsDashboardProps> = ({ user, onLogout }) => {
   const [activeLink, setActiveLink] = useState("Events");
 
   // View states
-const [currentView, setCurrentView] = useState<'events' | 'event-details'>('events');
-const [showQRScanner, setShowQRScanner] = useState(false);
-  
+  const [currentView, setCurrentView] = useState<"events" | "event-details">(
+    "events"
+  );
+  const [showQRScanner, setShowQRScanner] = useState(false);
+
   // Modal states
   const [showEventForm, setShowEventForm] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
@@ -48,7 +50,7 @@ const [showQRScanner, setShowQRScanner] = useState(false);
     addEvent,
     updateEvent,
     deleteEvent,
-    getEventById
+    getEventById,
   } = useEvents();
 
   // Event handlers
@@ -56,12 +58,12 @@ const [showQRScanner, setShowQRScanner] = useState(false);
     const event = getEventById(eventId);
     if (event) {
       setSelectedEvent(event);
-      setCurrentView('event-details');
+      setCurrentView("event-details");
     }
   };
 
   const handleBackToEvents = () => {
-    setCurrentView('events');
+    setCurrentView("events");
     setSelectedEvent(null);
   };
 
@@ -97,16 +99,16 @@ const [showQRScanner, setShowQRScanner] = useState(false);
     setEditingEvent(null);
   };
 
-    const handleOpenQRScanner = () => {
-      if (selectedEvent) {
-        setShowQRScanner(true);
-      }
-    };
+  const handleOpenQRScanner = () => {
+    if (selectedEvent) {
+      setShowQRScanner(true);
+    }
+  };
 
-    const handleStudentScanned = (studentId: string) => {
-      console.log('Student scanned:', studentId);
-      // TODO: integrate with attendance API
-    };
+  const handleStudentScanned = (studentId: string) => {
+    console.log("Student scanned:", studentId);
+    // TODO: integrate with attendance API
+  };
 
   const renderMainContent = () => {
     if (activeLink === "Settings") {
@@ -122,7 +124,11 @@ const [showQRScanner, setShowQRScanner] = useState(false);
     }
 
     // Events view - UPDATE this existing section
-    if (activeLink === "Events" && currentView === 'event-details' && selectedEvent) {
+    if (
+      activeLink === "Events" &&
+      currentView === "event-details" &&
+      selectedEvent
+    ) {
       return (
         <EventDetailsPage
           event={selectedEvent}
@@ -137,7 +143,7 @@ const [showQRScanner, setShowQRScanner] = useState(false);
       return (
         <>
           <Header user={user} onAddEvent={handleAddEvent} />
-          
+
           <SearchFilter
             searchTerm={searchTerm}
             setSearchTerm={setSearchTerm}
@@ -177,7 +183,7 @@ const [showQRScanner, setShowQRScanner] = useState(false);
 
   return (
     <AuthBackground>
-      <div className={`group/sidebar ${open ? 'sidebar-open' : ''}`}>
+      <div className={`group/sidebar ${open ? "sidebar-open" : ""}`}>
         <Sidebar open={open} setOpen={setOpen}>
           <SidebarBody className="justify-between gap-10">
             <div className="flex flex-1 flex-col overflow-x-hidden overflow-y-auto">
@@ -192,16 +198,18 @@ const [showQRScanner, setShowQRScanner] = useState(false);
                     animate={{ opacity: 1 }}
                     className="text-white text-lg text-center whitespace-nowrap tracking-wide"
                   >
-                    Hello! {user.email}
+                    Hello! {localStorage.getItem("fullName")}
                   </motion.p>
                 </div>
               )}
 
               <br />
 
-              <hr className={`transition-all duration-300 ease-in-out border-white border-opacity-60 ${
-                open ? 'w-55 mx-auto' : 'w-full'
-              }`} />
+              <hr
+                className={`transition-all duration-300 ease-in-out border-white border-opacity-60 ${
+                  open ? "w-55 mx-auto" : "w-full"
+                }`}
+              />
 
               {/* Navigation Links */}
               <div className="mt-8 flex flex-col gap-2 px-4 flex-1">
@@ -214,7 +222,7 @@ const [showQRScanner, setShowQRScanner] = useState(false);
                       setActiveLink(link.label);
                       // Reset view when changing navigation
                       if (link.label === "Events") {
-                        setCurrentView('events');
+                        setCurrentView("events");
                         setSelectedEvent(null);
                       }
                     }}
@@ -229,7 +237,7 @@ const [showQRScanner, setShowQRScanner] = useState(false);
                   isActive={activeLink === SETTINGS_LINK.label}
                   onClick={() => {
                     setActiveLink(SETTINGS_LINK.label);
-                    setCurrentView('events');
+                    setCurrentView("events");
                     setSelectedEvent(null);
                   }}
                 />
@@ -240,7 +248,11 @@ const [showQRScanner, setShowQRScanner] = useState(false);
       </div>
 
       {/* Main Content */}
-      <div className={`w-[75%] transition-all duration-300 ease-in-out p-4 md:p-8 ${open ? 'ml-60' : 'ml-20'}`}>
+      <div
+        className={`w-[75%] transition-all duration-300 ease-in-out p-4 md:p-8 ${
+          open ? "ml-60" : "ml-20"
+        }`}
+      >
         {renderMainContent()}
       </div>
 

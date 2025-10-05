@@ -1,6 +1,6 @@
-import React from 'react';
-import { Plus /*, ChevronDown*/ } from 'lucide-react';
-import type { User } from '../../types';
+import React from "react";
+import { Plus /*, ChevronDown*/ } from "lucide-react";
+import type { User } from "../../types";
 
 interface HeaderProps {
   user: User;
@@ -15,11 +15,12 @@ export const Header: React.FC<HeaderProps> = ({ user, onAddEvent }) => {
         <div className="flex items-center space-x-3">
           <div className="w-8 h-8 bg-teal-500 rounded-full flex items-center justify-center">
             <span className="text-sm text-white font-medium">
-  {user?.email?.charAt(0) ?? ""}
-</span>
+              {user?.email?.charAt(0) ?? ""}
+            </span>
           </div>
-         <span className="text-white hidden md:inline">{user?.email ?? ""}
-</span>
+          <span className="text-white hidden md:inline">
+            {localStorage.getItem("fullName") ?? ""}
+          </span>
           {/* <ChevronDown size={16} className="text-white hidden md:inline" /> */}
         </div>
       </div>

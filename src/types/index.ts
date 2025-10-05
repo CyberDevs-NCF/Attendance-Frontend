@@ -7,19 +7,19 @@ export interface Event {
   date: string;
   time: string;
   description?: string;
-  status: 'upcoming' | 'ongoing' | 'completed';
+  status: "upcoming" | "ongoing" | "completed";
   attendees?: Attendee[];
 }
 
 export interface User {
   email: string;
-  name: string;
+  fullname: string;
 }
 
 export interface EventsDashboardProps {
-  user: User;
+  email: string;
+  fullName: string;
   onLogout: () => void;
-  
 }
 
 export interface SidebarLink {

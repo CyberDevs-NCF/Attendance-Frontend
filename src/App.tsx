@@ -1,5 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+} from "react-router-dom";
 import LoginForm from "./components/LoginForm";
 import SignupForm from "./components/SignupForm";
 import Dashboard from "./components/Dashboard";
@@ -8,7 +13,7 @@ import axios from "axios";
 // Types
 interface User {
   email: string;
-  name: string;
+  fullName: string;
 }
 
 interface LoginFormData {
@@ -27,13 +32,12 @@ const App: React.FC = () => {
   const [loginLoading, setLoginLoading] = useState<boolean>(false);
   const [loginErrors, setLoginErrors] = useState<LoginFormErrors>({});
 
-   useEffect(() => {
+  useEffect(() => {
     const token = localStorage.getItem("token");
     if (token) {
       setIsAuthenticated(true);
     }
   }, []);
-
 
   // Handle login
   const handleLogin = async (data: LoginFormData) => {
@@ -50,28 +54,33 @@ const App: React.FC = () => {
       setLoginLoading(false);
       return;
     }
-    
 
-        try {
-  const res = await axios.post('http://localhost:3000/api/auth/login', data, {
-    headers: {
-      'Content-Type': 'application/json' // use json instead of x-www-form-urlencoded unless your backend requires it
+    try {
+      const res = await axios.post(
+        "http://localhost:3000/api/auth/login",
+        data,
+        {
+          headers: {
+            "Content-Type": "application/json", // use json instead of x-www-form-urlencoded unless your backend requires it
+          },
+        }
+      );
+
+      setIsAuthenticated(true);
+      setUser({ email: res.data.email, fullName: res.data.fullName });
+      // ✅ set user object
+      console.log("Login successful", res.data);
+
+      localStorage.setItem("token", res.data.token);
+      localStorage.setItem("email", res.data.email);
+      localStorage.setItem("fullName", res.data.fullName);
+    } catch (error) {
+      setLoginErrors({
+        email: "Invalid email or password",
+        password: "Invalid email or password",
+      });
+      console.error("Login failed", error);
     }
-  });
-
-  setIsAuthenticated(true);
-  setUser({ email: res.data.email, name: res.data.name ?? res.data.email });
-  // ✅ set user object
-  console.log('Login successful', res.data);
-
-  localStorage.setItem("token", res.data.token);
-} catch (error) {
-  setLoginErrors({
-    email: "Invalid email or password",
-    password: "Invalid email or password",
-  });
-  console.error('Login failed', error);
-}
 
     setLoginLoading(false);
   };
@@ -82,7 +91,9 @@ const App: React.FC = () => {
   };
 
   // Protected Route wrapper
-  const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({
+    children,
+  }) => {
     if (!isAuthenticated) {
       return <Navigate to="/" replace />;
     }
@@ -99,7 +110,11 @@ const App: React.FC = () => {
             isAuthenticated ? (
               <Navigate to="/dashboard" replace />
             ) : (
-              <LoginForm onLogin={handleLogin} isLoading={loginLoading} errors={loginErrors} />
+              <LoginForm
+                onLogin={handleLogin}
+                isLoading={loginLoading}
+                errors={loginErrors}
+              />
             )
           }
         />
@@ -112,7 +127,13 @@ const App: React.FC = () => {
           path="/dashboard"
           element={
             <ProtectedRoute>
-              <Dashboard user={user!} onLogout={handleLogout} />
+              <Dashboard
+                email={user?.email || localStorage.getItem("email") || "n/a"}
+                fullName={
+                  user?.fullName || localStorage.getItem("fullName") || "n/a"
+                }
+                onLogout={handleLogout}
+              />
             </ProtectedRoute>
           }
         />
