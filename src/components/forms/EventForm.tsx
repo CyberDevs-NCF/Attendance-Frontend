@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { X, Save } from 'lucide-react';
-import type { Event } from '../../types';
+import React, { useState } from "react";
+import { X, Save } from "lucide-react";
+import type { Event } from "../../types";
+import API from "../../utils/api";
 
 interface EventFormProps {
   event?: Event;
@@ -8,29 +9,41 @@ interface EventFormProps {
   onCancel: () => void;
 }
 
-export const EventForm: React.FC<EventFormProps> = ({ event, onSave, onCancel }) => {
+export const EventForm: React.FC<EventFormProps> = ({
+  event,
+  onSave,
+  onCancel,
+}) => {
   const [formData, setFormData] = useState({
-    title: event?.title || '',
-    location: event?.location || '',
-    date: event?.date || '',
-    time: event?.time || '',
-    description: event?.description || '',
-    status: event?.status || 'upcoming' as const
+    title: event?.title || "",
+    location: event?.location || "",
+    date: event?.date || "",
+    time: event?.time || "",
+    description: event?.description || "",
+    status: event?.status || ("upcoming" as const),
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const eventData: Event = {
-      id: event?.id || Date.now(),
-      ...formData
-    };
-    onSave(eventData);
+    try {
+      let response;
+      if (event) {
+        response = await API.put(`/events/${event.id}`, formData);
+      } else {
+        response = await API.post("/events", formData);
+      }
+      onSave(response.data);
+    } catch {
+      alert("Failed to save event.");
+    }
   };
 
   return (
     <div className="text-blue">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-xl font-semibold">{event ? 'Update Event' : 'Add New Event'}</h2>
+        <h2 className="text-xl font-semibold">
+          {event ? "Update Event" : "Add New Event"}
+        </h2>
         <button onClick={onCancel} className="text-gray-300 hover:text-blue">
           <X size={20} />
         </button>
@@ -42,7 +55,9 @@ export const EventForm: React.FC<EventFormProps> = ({ event, onSave, onCancel })
           <input
             type="text"
             value={formData.title}
-            onChange={(e) => setFormData({...formData, title: e.target.value})}
+            onChange={(e) =>
+              setFormData({ ...formData, title: e.target.value })
+            }
             className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-lg text-blue placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder="Enter event title"
             required
@@ -54,7 +69,9 @@ export const EventForm: React.FC<EventFormProps> = ({ event, onSave, onCancel })
           <input
             type="text"
             value={formData.location}
-            onChange={(e) => setFormData({...formData, location: e.target.value})}
+            onChange={(e) =>
+              setFormData({ ...formData, location: e.target.value })
+            }
             className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-lg text-blue placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder="Enter location"
             required
@@ -67,7 +84,9 @@ export const EventForm: React.FC<EventFormProps> = ({ event, onSave, onCancel })
             <input
               type="date"
               value={formData.date}
-              onChange={(e) => setFormData({...formData, date: e.target.value})}
+              onChange={(e) =>
+                setFormData({ ...formData, date: e.target.value })
+              }
               className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-lg text-blue focus:outline-none focus:ring-2 focus:ring-blue-500"
               required
             />
@@ -78,7 +97,9 @@ export const EventForm: React.FC<EventFormProps> = ({ event, onSave, onCancel })
             <input
               type="time"
               value={formData.time}
-              onChange={(e) => setFormData({...formData, time: e.target.value})}
+              onChange={(e) =>
+                setFormData({ ...formData, time: e.target.value })
+              }
               className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-lg text-blue focus:outline-none focus:ring-2 focus:ring-blue-500"
               required
             />
@@ -89,12 +110,23 @@ export const EventForm: React.FC<EventFormProps> = ({ event, onSave, onCancel })
           <label className="block text-sm font-medium mb-2">Status</label>
           <select
             value={formData.status}
-            onChange={(e) => setFormData({...formData, status: e.target.value as Event['status']})}
+            onChange={(e) =>
+              setFormData({
+                ...formData,
+                status: e.target.value as Event["status"],
+              })
+            }
             className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-lg text-blue focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <option value="upcoming" className="bg-gray-800">Upcoming</option>
-            <option value="ongoing" className="bg-gray-800">Ongoing</option>
-            <option value="completed" className="bg-gray-800">Completed</option>
+            <option value="upcoming" className="bg-gray-800">
+              Upcoming
+            </option>
+            <option value="ongoing" className="bg-gray-800">
+              Ongoing
+            </option>
+            <option value="completed" className="bg-gray-800">
+              Completed
+            </option>
           </select>
         </div>
 
@@ -102,7 +134,9 @@ export const EventForm: React.FC<EventFormProps> = ({ event, onSave, onCancel })
           <label className="block text-sm font-medium mb-2">Description</label>
           <textarea
             value={formData.description}
-            onChange={(e) => setFormData({...formData, description: e.target.value})}
+            onChange={(e) =>
+              setFormData({ ...formData, description: e.target.value })
+            }
             className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-lg text-blue placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 h-24 resize-none"
             placeholder="Enter event description (optional)"
           />
@@ -114,7 +148,7 @@ export const EventForm: React.FC<EventFormProps> = ({ event, onSave, onCancel })
             className="flex-1 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors"
           >
             <Save size={16} />
-            <span>{event ? 'Update' : 'Save'} Event</span>
+            <span>{event ? "Update" : "Save"} Event</span>
           </button>
           <button
             type="button"
