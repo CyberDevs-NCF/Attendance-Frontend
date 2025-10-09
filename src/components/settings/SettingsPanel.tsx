@@ -1,10 +1,8 @@
 import React from "react";
 import { motion } from "framer-motion";
-import type { User } from "../../types";
 import { THEMES } from "../../utils/constants";
 
 interface SettingsPanelProps {
-  user: User;
   onLogout: () => void;
 }
 

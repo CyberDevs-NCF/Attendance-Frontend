@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, QrCode, ChevronDown, Clock, UserCheck, UserX } from 'lucide-react';
+import { ArrowLeft, QrCode, ChevronDown, Clock} from 'lucide-react';
 import { motion } from 'framer-motion';
 import QRScannerPage from './QRScannerPage';
 

@@ -1,8 +1,9 @@
-import React from 'react';
-import { Eye, Edit, Trash2 } from 'lucide-react';
-import { motion } from 'framer-motion';
-import type { Event } from '../../types';
-import { getStatusColor } from '../../utils/constants';
+import React, { useEffect, useState } from "react";
+import { Eye, Edit, Trash2 } from "lucide-react";
+import { motion } from "framer-motion";
+import type { Event } from "../../types";
+import { getStatusColor } from "../../utils/constants";
+import API from "../../utils/api";
 
 interface EventsTableProps {
   events: Event[];
@@ -12,11 +13,32 @@ interface EventsTableProps {
 }
 
 export const EventsTable: React.FC<EventsTableProps> = ({
-  events,
+  events: propEvents,
   onViewDetails,
   onEdit,
-  onDelete
+  onDelete,
 }) => {
+  const [events, setEvents] = useState<Event[]>(propEvents || []);
+
+  useEffect(() => {
+    let mounted = true;
+    const fetchEvents = async () => {
+      try {
+        const res = await API.get("/events");
+        if (!mounted) return;
+        setEvents(res.data || []);
+      } catch (err) {
+        if (!mounted) return;
+        console.error("Failed to fetch events", err);
+        setEvents(propEvents || []);
+      }
+    };
+    fetchEvents();
+    return () => {
+      mounted = false;
+    };
+  }, [propEvents]);
+
   if (events.length === 0) {
     return (
       <motion.div
@@ -45,11 +67,17 @@ export const EventsTable: React.FC<EventsTableProps> = ({
         <thead>
           <tr className="bg-blue bg-opacity-10 border-b border-blue border-opacity-10">
             <th className="text-left py-4 px-6 text-blue font-medium">Title</th>
-            <th className="text-left py-4 px-6 text-blue font-medium">Location</th>
+            <th className="text-left py-4 px-6 text-blue font-medium">
+              Location
+            </th>
             <th className="text-left py-4 px-6 text-blue font-medium">Date</th>
             <th className="text-left py-4 px-6 text-blue font-medium">Time</th>
-            <th className="text-left py-4 px-6 text-blue font-medium">Status</th>
-            <th className="text-left py-4 px-6 text-blue font-medium">Action</th>
+            <th className="text-left py-4 px-6 text-blue font-medium">
+              Status
+            </th>
+            <th className="text-left py-4 px-6 text-blue font-medium">
+              Action
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -57,7 +85,7 @@ export const EventsTable: React.FC<EventsTableProps> = ({
             <tr
               key={event.id}
               className={`border-b border-blue border-opacity-5 ${
-                index % 2 === 0 ? 'bg-blue bg-opacity-5' : 'bg-transparent'
+                index % 2 === 0 ? "bg-blue bg-opacity-5" : "bg-transparent"
               } hover:bg-blue hover:bg-opacity-10 transition-colors`}
             >
               <td className="py-4 px-6 text-blue">{event.title}</td>
@@ -66,7 +94,9 @@ export const EventsTable: React.FC<EventsTableProps> = ({
               <td className="py-4 px-6 text-blue">{event.time}</td>
               <td className="py-4 px-6">
                 <span
-                  className={`px-2 py-1 rounded-full text-xs font-medium text-white ${getStatusColor(event.status)}`}
+                  className={`px-2 py-1 rounded-full text-xs font-medium text-white ${getStatusColor(
+                    event.status
+                  )}`}
                 >
                   {event.status.charAt(0).toUpperCase() + event.status.slice(1)}
                 </span>

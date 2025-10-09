@@ -24,7 +24,7 @@ import { NAVIGATION_LINKS, SETTINGS_LINK } from "../utils/constants";
 // Types
 import type { EventsDashboardProps, Event } from "../types";
 
-const Dashboard: React.FC<EventsDashboardProps> = ({ user, onLogout }) => {
+const Dashboard: React.FC<EventsDashboardProps> = ({ onLogout }) => {
   // Sidebar state
   const [open, setOpen] = useState(false);
   const [activeLink, setActiveLink] = useState("Events");
@@ -112,7 +112,7 @@ const Dashboard: React.FC<EventsDashboardProps> = ({ user, onLogout }) => {
 
   const renderMainContent = () => {
     if (activeLink === "Settings") {
-      return <SettingsPanel user={user} onLogout={onLogout} />;
+      return <SettingsPanel onLogout={onLogout} />;
     }
 
     if (activeLink === "Registration") {
@@ -142,7 +142,7 @@ const Dashboard: React.FC<EventsDashboardProps> = ({ user, onLogout }) => {
     if (activeLink === "Events") {
       return (
         <>
-          <Header user={user} onAddEvent={handleAddEvent} />
+          <Header onAddEvent={handleAddEvent} />
 
           <SearchFilter
             searchTerm={searchTerm}
