@@ -15,7 +15,7 @@ export interface Attendee {
 }
 
 export interface Event {
-  id?: any;
+  id?: string;
   _id?: string;
   title: string;
   location: string;

@@ -20,3 +20,15 @@ export const getEventById = async (id: string | number) => {
   const res = await API.get(`/events/${id}`);
   return res.data;
 };
+
+// Save or update an attendance record for an event/student
+export const saveAttendance = async (
+  attendance: { event_id: string; student_id: string },
+  timeField: "timeInAM" | "timeOutAM" | "timeInPM" | "timeOutPM"
+) => {
+  const res = await API.post(
+    `/attendance?time=${encodeURIComponent(timeField)}`,
+    attendance
+  );
+  return res.data;
+};

@@ -3,6 +3,7 @@ import { ArrowLeft, QrCode, ChevronDown, Clock } from "lucide-react";
 import { motion } from "framer-motion";
 import QRScannerPage from "./QRScannerPage";
 import type { Event, Attendee } from "../../types";
+import { saveAttendance } from "../../utils/api";
 
 interface EventDetailsPageProps {
   event: Event & { attendees?: Attendee[] };
@@ -28,6 +29,7 @@ export const EventDetailsPage: React.FC<EventDetailsPageProps> = ({
     isTimeIn: boolean,
     period: "AM" | "PM"
   ) => {
+    // server will create the Date on its side; we only need to tell it which field to set
     const getId = (a: Partial<Attendee>) => a._id ?? a.id ?? "";
     setAttendees((prev) => {
       const exists = prev.find((a) => getId(a) === getId(newAttendee));
@@ -57,6 +59,32 @@ export const EventDetailsPage: React.FC<EventDetailsPageProps> = ({
       ];
     });
     setShowScanner(false);
+
+    // send to backend
+    (async () => {
+      try {
+        const studentId = newAttendee._id ?? newAttendee.id ?? "";
+        const payload = {
+          event_id: event._id ?? event.id ?? "",
+          student_id: studentId,
+        };
+
+        // Determine the server-side time field to set
+        const timeField = isTimeIn
+          ? period === "AM"
+            ? "timeInAM"
+            : "timeInPM"
+          : period === "AM"
+          ? "timeOutAM"
+          : "timeOutPM";
+
+        await saveAttendance(payload, timeField);
+      } catch (err) {
+        // non-fatal: keep UI updated but log error
+        // log intentionally left (no-console not enforced here)
+        console.error("Failed to save attendance", err);
+      }
+    })();
   };
 
   // Filter attendees based on search and filters
