@@ -83,7 +83,7 @@ export const EventsTable: React.FC<EventsTableProps> = ({
         <tbody>
           {events.map((event, index) => (
             <tr
-              key={event.id}
+              key={event._id}
               className={`border-b border-blue border-opacity-5 ${
                 index % 2 === 0 ? "bg-blue bg-opacity-5" : "bg-transparent"
               } hover:bg-blue hover:bg-opacity-10 transition-colors`}
@@ -104,21 +104,21 @@ export const EventsTable: React.FC<EventsTableProps> = ({
               <td className="py-4 px-6">
                 <div className="flex space-x-2">
                   <button
-                    onClick={() => onViewDetails(event.id)}
+                    onClick={() => onViewDetails(event._id)}
                     className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-md text-sm flex items-center space-x-1 transition-colors"
                   >
                     <Eye size={12} />
                     <span>View</span>
                   </button>
                   <button
-                    onClick={() => onEdit(event.id)}
+                    onClick={() => onEdit(event._id)}
                     className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-md text-sm flex items-center space-x-1 transition-colors"
                   >
                     <Edit size={12} />
                     <span>Update</span>
                   </button>
                   <button
-                    onClick={() => onDelete(event.id)}
+                    onClick={() => onDelete(event._id)}
                     className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-md text-sm flex items-center space-x-1 transition-colors"
                   >
                     <Trash2 size={12} />

@@ -14,3 +14,9 @@ API.interceptors.request.use((config) => {
 });
 
 export default API;
+
+// Fetch a single event by id
+export const getEventById = async (id: string | number) => {
+  const res = await API.get(`/events/${id}`);
+  return res.data;
+};

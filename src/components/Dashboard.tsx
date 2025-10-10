@@ -19,6 +19,7 @@ import RegistrationForm from "./forms/RegistrationForm";
 
 // Hooks and utilities
 import { useEvents } from "../hooks/useEvents";
+import { getEventById as apiGetEventById } from "../utils/api";
 import { NAVIGATION_LINKS, SETTINGS_LINK } from "../utils/constants";
 
 // Types
@@ -50,15 +51,18 @@ const Dashboard: React.FC<EventsDashboardProps> = ({ onLogout }) => {
     addEvent,
     updateEvent,
     deleteEvent,
-    getEventById,
+    getEventById: localGetEventById,
   } = useEvents();
 
   // Event handlers
-  const handleViewDetails = (eventId: number) => {
-    const event = getEventById(eventId);
-    if (event) {
-      setSelectedEvent(event);
-      setCurrentView("event-details");
+  const handleViewDetails = async (eventId: string | number) => {
+    try {
+      const id = typeof eventId === "number" ? String(eventId) : eventId;
+      const event = await apiGetEventById(id);
+      setSelectedEvent((event as unknown as Event) || null);
+      if (event) setCurrentView("event-details");
+    } catch (err) {
+      console.error("Failed to fetch event details", err);
     }
   };
 
@@ -68,7 +72,7 @@ const Dashboard: React.FC<EventsDashboardProps> = ({ onLogout }) => {
   };
 
   const handleUpdate = (eventId: number) => {
-    const event = getEventById(eventId);
+    const event = localGetEventById(eventId);
     if (event) {
       setEditingEvent(event);
       setShowEventForm(true);

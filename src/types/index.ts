@@ -1,7 +1,22 @@
 import type { ComponentType } from "react";
 
+export interface Attendee {
+  id?: string;
+  _id?: string;
+  name: string;
+  block: string;
+  year: string;
+  course: string;
+  timeIn?: string;
+  timeInAM?: string;
+  timeOutAM?: string;
+  timeInPM?: string;
+  timeOutPM?: string;
+}
+
 export interface Event {
-  id: number;
+  id?: any;
+  _id?: string;
   title: string;
   location: string;
   date: string;
@@ -28,14 +43,7 @@ export interface SidebarLink {
   href?: string;
 }
 
-export interface Attendee {
-  id: string;
-  name: string;
-  block: string;
-  year: string;
-  course: string;
-  timeIn?: string;
-}
+// (Attendee defined above)
 
 export interface Theme {
   name: string;
