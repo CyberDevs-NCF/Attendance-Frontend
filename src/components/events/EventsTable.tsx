@@ -7,9 +7,9 @@ import API from "../../utils/api";
 
 interface EventsTableProps {
   events: Event[];
-  onViewDetails: (eventId: number) => void;
-  onEdit: (eventId: number) => void;
-  onDelete: (eventId: number) => void;
+  onViewDetails: (eventId?: string) => void;
+  onEdit: (eventId?: string) => void;
+  onDelete: (eventId?: string) => void;
 }
 
 export const EventsTable: React.FC<EventsTableProps> = ({
@@ -104,21 +104,21 @@ export const EventsTable: React.FC<EventsTableProps> = ({
               <td className="py-4 px-6">
                 <div className="flex space-x-2">
                   <button
-                    onClick={() => onViewDetails(event._id)}
+                    onClick={() => onViewDetails(event._id ?? event.id)}
                     className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-md text-sm flex items-center space-x-1 transition-colors"
                   >
                     <Eye size={12} />
                     <span>View</span>
                   </button>
                   <button
-                    onClick={() => onEdit(event._id)}
+                    onClick={() => onEdit(event._id ?? event.id)}
                     className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-md text-sm flex items-center space-x-1 transition-colors"
                   >
                     <Edit size={12} />
                     <span>Update</span>
                   </button>
                   <button
-                    onClick={() => onDelete(event._id)}
+                    onClick={() => onDelete(event._id ?? event.id)}
                     className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-md text-sm flex items-center space-x-1 transition-colors"
                   >
                     <Trash2 size={12} />

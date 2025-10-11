@@ -3,7 +3,7 @@ import { ArrowLeft, QrCode, ChevronDown, Clock } from "lucide-react";
 import { motion } from "framer-motion";
 import QRScannerPage from "./QRScannerPage";
 import type { Event, Attendee } from "../../types";
-import { saveAttendance } from "../../utils/api";
+import { saveAttendance, getAttendeesByEvent } from "../../utils/api";
 
 interface EventDetailsPageProps {
   event: Event & { attendees?: Attendee[] };
@@ -22,6 +22,55 @@ export const EventDetailsPage: React.FC<EventDetailsPageProps> = ({
   const [selectedBlock, setSelectedBlock] = useState("All Blocks");
   const [selectedYear, setSelectedYear] = useState("All Years");
   const [selectedCourse, setSelectedCourse] = useState("All Courses");
+
+  // Fetch attendees from backend for the given event
+  React.useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const id = event._id ?? event.id ?? "";
+        if (!id) return;
+        const res = await getAttendeesByEvent(id);
+        if (!mounted) return;
+        // Expecting res to be an array of attendees. Normalize backend shape to Attendee
+        if (Array.isArray(res)) {
+          const normalized = res.map(
+            (a: Partial<Attendee> & Record<string, unknown>) =>
+              ({
+                _id: a._id as string | undefined,
+                student_id: a.student_id as string | undefined,
+                fname: a.fname as string | undefined,
+                lname: a.lname as string | undefined,
+                middle: a.middle as string | undefined,
+                section: String(a.section || a.block || "").trim(),
+                email: a.email as string | undefined,
+                name:
+                  a.fname && a.lname
+                    ? `${a.fname} ${a.lname}`
+                    : (a.name as string) || "",
+                timeInAM: (a.timeInAM as string) ?? null,
+                timeOutAM: (a.timeOutAM as string) ?? null,
+                timeInPM: (a.timeInPM as string) ?? null,
+                timeOutPM: (a.timeOutPM as string) ?? null,
+                block: (a.block as string) ?? "",
+                year: (a.year as string) ?? "",
+                course: (a.course as string) ?? "",
+              } as Attendee)
+          );
+          setAttendees(normalized);
+        }
+      } catch (err) {
+        // keep local attendees from event prop as fallback
+        console.warn(
+          "Failed to fetch attendees from API, using event.attendees",
+          err
+        );
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [event]);
 
   const handleApproveAttendee = (
     newAttendee: Partial<Attendee> & { _id?: string; id?: string },
@@ -120,8 +169,20 @@ export const EventDetailsPage: React.FC<EventDetailsPageProps> = ({
   // Calculate statistics
   const totalAttendees = attendees.length;
   const presentCount = attendees.filter((a) => a.timeInAM || a.timeInPM).length;
+  const formatTime = (iso?: string | null) => {
+    if (!iso) return null;
+    try {
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return iso;
+      return d.toLocaleString();
+    } catch {
+      return iso;
+    }
+  };
   const attendanceRate =
-    totalAttendees > 0 ? Math.round((presentCount / totalAttendees) * 100) : 0;
+    totalAttendees > 488
+      ? Math.round((presentCount / totalAttendees) * 100)
+      : 0;
 
   return (
     <motion.div
@@ -295,19 +356,16 @@ export const EventDetailsPage: React.FC<EventDetailsPageProps> = ({
             <thead className="bg-gray-50 sticky top-0">
               <tr>
                 <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">
-                  ID
+                  Student ID
                 </th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">
                   Name
                 </th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">
-                  Block
+                  Section
                 </th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">
-                  Year
-                </th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">
-                  Course
+                  Email
                 </th>
                 <th className="text-center py-3 px-4 text-sm font-medium text-gray-700">
                   Time In(AM)
@@ -327,29 +385,28 @@ export const EventDetailsPage: React.FC<EventDetailsPageProps> = ({
               {filteredAttendees.length > 0 ? (
                 filteredAttendees.map((attendee) => (
                   <tr
-                    key={attendee._id ?? attendee.id}
+                    key={attendee._id ?? attendee.student_id ?? attendee.id}
                     className="hover:bg-gray-50 transition-colors"
                   >
                     <td className="py-3 px-4 text-sm text-gray-900">
-                      {attendee._id ?? attendee.id}
+                      {attendee.student_id ?? attendee._id ?? attendee.id}
                     </td>
                     <td className="py-3 px-4 text-sm text-gray-900 font-medium">
-                      {attendee.name}
+                      {`${attendee.fname ?? ""} ${
+                        attendee.lname ?? ""
+                      }`.trim() || attendee.name}
                     </td>
                     <td className="py-3 px-4 text-sm text-gray-600">
-                      {attendee.block}
+                      {attendee.section ?? attendee.block ?? "-"}
                     </td>
                     <td className="py-3 px-4 text-sm text-gray-600">
-                      {attendee.year}
-                    </td>
-                    <td className="py-3 px-4 text-sm text-gray-600">
-                      {attendee.course}
+                      {attendee.email ?? "-"}
                     </td>
                     <td className="py-3 px-4 text-sm text-gray-600 text-center">
                       {attendee.timeInAM ? (
                         <span className="inline-flex items-center gap-1 text-green-600">
                           <Clock size={12} />
-                          {attendee.timeInAM}
+                          {formatTime(attendee.timeInAM)}
                         </span>
                       ) : (
                         <span className="text-gray-400">-</span>
@@ -359,7 +416,7 @@ export const EventDetailsPage: React.FC<EventDetailsPageProps> = ({
                       {attendee.timeOutAM ? (
                         <span className="inline-flex items-center gap-1 text-red-600">
                           <Clock size={12} />
-                          {attendee.timeOutAM}
+                          {formatTime(attendee.timeOutAM)}
                         </span>
                       ) : (
                         <span className="text-gray-400">-</span>
@@ -369,7 +426,7 @@ export const EventDetailsPage: React.FC<EventDetailsPageProps> = ({
                       {attendee.timeInPM ? (
                         <span className="inline-flex items-center gap-1 text-green-600">
                           <Clock size={12} />
-                          {attendee.timeInPM}
+                          {formatTime(attendee.timeInPM)}
                         </span>
                       ) : (
                         <span className="text-gray-400">-</span>
@@ -379,7 +436,7 @@ export const EventDetailsPage: React.FC<EventDetailsPageProps> = ({
                       {attendee.timeOutPM ? (
                         <span className="inline-flex items-center gap-1 text-red-600">
                           <Clock size={12} />
-                          {attendee.timeOutPM}
+                          {formatTime(attendee.timeOutPM)}
                         </span>
                       ) : (
                         <span className="text-gray-400">-</span>

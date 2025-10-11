@@ -3,6 +3,12 @@ import type { ComponentType } from "react";
 export interface Attendee {
   id?: string;
   _id?: string;
+  student_id?: string;
+  fname?: string;
+  lname?: string;
+  middle?: string;
+  section?: string;
+  email?: string;
   name: string;
   block: string;
   year: string;

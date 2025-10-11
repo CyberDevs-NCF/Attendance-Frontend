@@ -32,3 +32,10 @@ export const saveAttendance = async (
   );
   return res.data;
 };
+
+// Get attendees related to an event id
+export const getAttendeesByEvent = async (eventId: string) => {
+  console.log("test get attendance by event ", eventId);
+  const res = await API.get("/attendance/getStudentFromEvent/" + eventId);
+  return res.data;
+};

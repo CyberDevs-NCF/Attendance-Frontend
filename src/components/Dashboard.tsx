@@ -55,8 +55,9 @@ const Dashboard: React.FC<EventsDashboardProps> = ({ onLogout }) => {
   } = useEvents();
 
   // Event handlers
-  const handleViewDetails = async (eventId: string | number) => {
+  const handleViewDetails = async (eventId?: string | number) => {
     try {
+      if (!eventId) return;
       const id = typeof eventId === "number" ? String(eventId) : eventId;
       const event = await apiGetEventById(id);
       setSelectedEvent((event as unknown as Event) || null);
@@ -71,7 +72,7 @@ const Dashboard: React.FC<EventsDashboardProps> = ({ onLogout }) => {
     setSelectedEvent(null);
   };
 
-  const handleUpdate = (eventId: number) => {
+  const handleUpdate = (eventId?: string) => {
     const event = localGetEventById(eventId);
     if (event) {
       setEditingEvent(event);
@@ -79,7 +80,7 @@ const Dashboard: React.FC<EventsDashboardProps> = ({ onLogout }) => {
     }
   };
 
-  const handleDelete = (eventId: number) => {
+  const handleDelete = (eventId?: string) => {
     deleteEvent(eventId);
   };
 

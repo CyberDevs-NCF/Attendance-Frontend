@@ -1,6 +1,16 @@
 import { useState } from "react";
 import type { Event } from "../types";
 
+const generateObjectId = () => {
+  // Create a Mongo-like ObjectId: 4-byte timestamp + 16 hex chars
+  const timestamp = Math.floor(Date.now() / 1000).toString(16);
+  const random = Array.from({ length: 16 })
+    .map(() => Math.floor(Math.random() * 16).toString(16))
+    .join("");
+  const id = (timestamp + random).padEnd(24, "0").slice(0, 24);
+  return id;
+};
+
 export const useEvents = () => {
   const [events, setEvents] = useState<Event[]>([]);
 
@@ -9,9 +19,9 @@ export const useEvents = () => {
     "all"
   );
 
-  const addEvent = (eventData: Omit<Event, "id">) => {
+  const addEvent = (eventData: Omit<Event, "_id">) => {
     const newEvent: Event = {
-      id: Date.now(),
+      _id: generateObjectId(),
       ...eventData,
     };
     setEvents([...events, newEvent]);
@@ -23,13 +33,15 @@ export const useEvents = () => {
     );
   };
 
-  const deleteEvent = (eventId: number) => {
+  const deleteEvent = (eventId?: string) => {
+    if (!eventId) return;
     if (window.confirm("Are you sure you want to delete this event?")) {
-      setEvents(events.filter((event) => event.id !== eventId));
+      setEvents(events.filter((event) => event._id !== eventId));
     }
   };
 
-  const getEventById = (id: number) => events.find((event) => event.id === id);
+  const getEventById = (id?: string) =>
+    events.find((event) => event._id === id);
 
   const filteredEvents = events.filter((event) => {
     const matchesSearch =
