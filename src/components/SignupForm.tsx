@@ -1,18 +1,19 @@
 import React, { useState } from "react";
+import axios from "axios";
 import { Eye, EyeOff } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import Header from "./Header";
 import AuthBackground from "./AuthBackground";
 
 interface FormErrors {
-  name?: string;
+  fullName?: string;
   email?: string;
   password?: string;
 }
 
 const SignupForm: React.FC = () => {
   const [form, setForm] = useState({
-    name: "",
+    fullName: "",
     email: "",
     password: "",
   });
@@ -34,15 +35,19 @@ const SignupForm: React.FC = () => {
     const newErrors: FormErrors = {};
     const allowedDomains = ["@gbox.ncf.edu.ph", "@ncf.edu.ph"];
 
-    if (!form.name.trim()) newErrors.name = "Full name is required";
+    if (!form.fullName.trim()) newErrors.fullName = "Full name is required";
     if (!form.email.trim()) {
       newErrors.email = "Email is required";
-    } else if (!allowedDomains.some(domain => form.email.toLowerCase().endsWith(domain))) {
+    } else if (
+      !allowedDomains.some((domain) =>
+        form.email.toLowerCase().endsWith(domain)
+      )
+    ) {
       newErrors.email = "Email must end with @gbox.ncf.edu.ph or @ncf.edu.ph";
     }
     if (!form.password.trim()) {
       newErrors.password = "Password is required";
-    } else if (form.password.length < 6) {
+    } else if (form.password.length < 8) {
       newErrors.password = "Password must be at least 6 characters";
     }
 
@@ -53,16 +58,33 @@ const SignupForm: React.FC = () => {
     setIsLoading(true);
     setSuccessMessage("");
 
-    // simulate async signup
-    setTimeout(() => {
+    try {
+      const res = await axios.post(
+        "http://localhost:3000/api/auth/signup",
+        {
+          fullName: form.fullName,
+          email: form.email,
+          password: form.password,
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      console.log(res.data);
       setSuccessMessage("Signup successful! 🎉");
       setIsLoading(false);
-      setTimeout(() => navigate("/"), 1500);
-    }, 1500);
+      // setTimeout(() => navigate("/"), 1500);
+    } catch (error) {
+      console.log(error);
+      setIsLoading(false);
+      setSuccessMessage("");
+      setFormErrors({ email: "Signup failed. Please try again." });
+    }
   };
 
   return (
-    
     <AuthBackground>
       <Header />
 
@@ -71,38 +93,48 @@ const SignupForm: React.FC = () => {
         <div className="bg-white/30 backdrop-blur-xl rounded-2xl p-6 sm:p-8 border border-white/10 shadow-2xl w-full">
           {/* Title */}
           <div className="text-center mb-6 sm:mb-8">
-            <h1 className="text-xl sm:text-2xl font-bold text-white mb-2">Create an Account</h1>
+            <h1 className="text-xl sm:text-2xl font-bold text-white mb-2">
+              Create an Account
+            </h1>
             <p className="text-gray-200 text-sm">Join us and get started!</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
-            {/* Name */}
+            {/* Full Name */}
             <div>
-              <label htmlFor="name" className="block text-white text-sm font-medium mb-2">
+              <label
+                htmlFor="fullName"
+                className="block text-white text-sm font-medium mb-2"
+              >
                 Full Name
               </label>
               <input
                 type="text"
-                id="name"
-                name="name"
-                value={form.name}
+                id="fullName"
+                name="fullName"
+                value={form.fullName}
                 onChange={handleChange}
                 placeholder="Full Name"
                 className={`w-full px-4 py-3 rounded-lg bg-white/90 border ${
-                  formErrors.name
+                  formErrors.fullName
                     ? "border-red-400 focus:border-red-500"
                     : "border-gray-300 focus:border-blue-500"
                 } focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-gray-800 placeholder-gray-500 transition-all duration-300 shadow-xl/30`}
                 disabled={isLoading}
               />
-              {formErrors.name && (
-                <p className="text-red-400 text-sm mt-1">{formErrors.name}</p>
+              {formErrors.fullName && (
+                <p className="text-red-400 text-sm mt-1">
+                  {formErrors.fullName}
+                </p>
               )}
             </div>
 
             {/* Email */}
             <div>
-              <label htmlFor="email" className="block text-white text-sm font-medium mb-2">
+              <label
+                htmlFor="email"
+                className="block text-white text-sm font-medium mb-2"
+              >
                 Email
               </label>
               <input
@@ -126,7 +158,10 @@ const SignupForm: React.FC = () => {
 
             {/* Password */}
             <div>
-              <label htmlFor="password" className="block text-white text-sm font-medium mb-2">
+              <label
+                htmlFor="password"
+                className="block text-white text-sm font-medium mb-2"
+              >
                 Password
               </label>
               <div className="relative">
@@ -158,14 +193,18 @@ const SignupForm: React.FC = () => {
                 </button>
               </div>
               {formErrors.password && (
-                <p className="text-red-400 text-sm mt-1">{formErrors.password}</p>
+                <p className="text-red-400 text-sm mt-1">
+                  {formErrors.password}
+                </p>
               )}
             </div>
 
             {/* Signup Button */}
             <button
               type="submit"
-              disabled={isLoading || !form.name || !form.email || !form.password}
+              disabled={
+                isLoading || !form.fullName || !form.email || !form.password
+              }
               className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg transition-all duration-300 flex items-center justify-center shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 active:translate-y-0"
             >
               {isLoading ? (
@@ -181,7 +220,9 @@ const SignupForm: React.FC = () => {
 
           {/* Success + QR preview */}
           {successMessage && (
-            <p className="text-green-400 text-sm mt-4 text-center">{successMessage}</p>
+            <p className="text-green-400 text-sm mt-4 text-center">
+              {successMessage}
+            </p>
           )}
 
           {/* Back to Login */}

@@ -1,22 +1,24 @@
-import React from 'react';
-import { Plus /*, ChevronDown*/ } from 'lucide-react';
-import type { User } from '../../types';
+import React from "react";
+import { Plus /*, ChevronDown*/ } from "lucide-react";
 
 interface HeaderProps {
-  user: User;
   onAddEvent: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ user, onAddEvent }) => {
+export const Header: React.FC<HeaderProps> = ({  onAddEvent }) => {
   return (
     <>
       {/* User Info Section */}
       <div className="flex justify-end items-center mb-8">
         <div className="flex items-center space-x-3">
           <div className="w-8 h-8 bg-teal-500 rounded-full flex items-center justify-center">
-            <span className="text-sm text-white font-medium">{user.name.charAt(0)}</span>
+            <span className="text-sm text-white font-medium">
+              {/* {user?.email?.charAt(0) ?? ""} */}
+            </span>
           </div>
-          <span className="text-white hidden md:inline">{user.name}</span>
+          <span className="text-white hidden md:inline">
+            {localStorage.getItem("fullName") ?? ""}
+          </span>
           {/* <ChevronDown size={16} className="text-white hidden md:inline" /> */}
         </div>
       </div>

@@ -1,25 +1,46 @@
 import type { ComponentType } from "react";
 
+export interface Attendee {
+  id?: string;
+  _id?: string;
+  student_id?: string;
+  fname?: string;
+  lname?: string;
+  middle?: string;
+  section?: string;
+  email?: string;
+  name: string;
+  block: string;
+  year: string;
+  course: string;
+  timeIn?: string;
+  timeInAM?: string;
+  timeOutAM?: string;
+  timeInPM?: string;
+  timeOutPM?: string;
+}
+
 export interface Event {
-  id: number;
+  id?: string;
+  _id?: string;
   title: string;
   location: string;
   date: string;
   time: string;
   description?: string;
-  status: 'upcoming' | 'ongoing' | 'completed';
+  status: "upcoming" | "ongoing" | "completed";
   attendees?: Attendee[];
 }
 
 export interface User {
   email: string;
-  name: string;
+  fullname: string;
 }
 
 export interface EventsDashboardProps {
-  user: User;
+  email: string;
+  fullName: string;
   onLogout: () => void;
-  
 }
 
 export interface SidebarLink {
@@ -28,17 +49,15 @@ export interface SidebarLink {
   href?: string;
 }
 
-export interface Attendee {
-  id: string;
-  name: string;
-  block: string;
-  year: string;
-  course: string;
-  timeIn?: string;
-}
+// (Attendee defined above)
 
 export interface Theme {
   name: string;
   icon: string;
   active: boolean;
 }
+
+export const getUserFromLocalStorage = (): User => ({
+  email: localStorage.getItem("email") ?? "",
+  fullname: localStorage.getItem("fullName") ?? "",
+});

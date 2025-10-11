@@ -1,100 +1,188 @@
-import React, { useState } from 'react';
-import { ArrowLeft, QrCode, ChevronDown, Clock, UserCheck, UserX } from 'lucide-react';
-import { motion } from 'framer-motion';
-import QRScannerPage from './QRScannerPage';
-
-interface Attendee {
-  id: string;
-  name: string;
-  block: string;
-  year: string;
-  course: string;
-  timeInAM?: string;
-  timeOutAM?: string;
-  timeInPM?: string;
-  timeOutPM?: string;
-}
-
-
-interface Event {
-  id: number;
-  title: string;
-  location: string;
-  date: string;
-  time: string;
-  description?: string;
-  status: 'upcoming' | 'ongoing' | 'completed';
-  attendees?: Attendee[];
-}
+import React, { useState } from "react";
+import { ArrowLeft, QrCode, ChevronDown, Clock } from "lucide-react";
+import { motion } from "framer-motion";
+import QRScannerPage from "./QRScannerPage";
+import type { Event, Attendee } from "../../types";
+import { saveAttendance, getAttendeesByEvent } from "../../utils/api";
 
 interface EventDetailsPageProps {
   event: Event & { attendees?: Attendee[] };
   onBack: () => void;
+  onScanQR?: () => void;
 }
 
-export const EventDetailsPage: React.FC<EventDetailsPageProps> = ({ event, onBack }) => {
+export const EventDetailsPage: React.FC<EventDetailsPageProps> = ({
+  event,
+  onBack,
+}) => {
   const [attendees, setAttendees] = useState<Attendee[]>(event.attendees || []);
   const [showScanner, setShowScanner] = useState(false);
 
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedBlock, setSelectedBlock] = useState('All Blocks');
-  const [selectedYear, setSelectedYear] = useState('All Years');
-  const [selectedCourse, setSelectedCourse] = useState('All Courses');
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedBlock, setSelectedBlock] = useState("All Blocks");
+  const [selectedYear, setSelectedYear] = useState("All Years");
+  const [selectedCourse, setSelectedCourse] = useState("All Courses");
 
-  const handleApproveAttendee = (newAttendee: Attendee, time: string, isTimeIn: boolean, period: 'AM' | 'PM') => {
-    setAttendees(prev => {
-      const exists = prev.find(a => a.id === newAttendee.id);
+  // Fetch attendees from backend for the given event
+  React.useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const id = event._id ?? event.id ?? "";
+        if (!id) return;
+        const res = await getAttendeesByEvent(id);
+        if (!mounted) return;
+        // Expecting res to be an array of attendees. Normalize backend shape to Attendee
+        if (Array.isArray(res)) {
+          const normalized = res.map(
+            (a: Partial<Attendee> & Record<string, unknown>) =>
+              ({
+                _id: a._id as string | undefined,
+                student_id: a.student_id as string | undefined,
+                fname: a.fname as string | undefined,
+                lname: a.lname as string | undefined,
+                middle: a.middle as string | undefined,
+                section: String(a.section || a.block || "").trim(),
+                email: a.email as string | undefined,
+                name:
+                  a.fname && a.lname
+                    ? `${a.fname} ${a.lname}`
+                    : (a.name as string) || "",
+                timeInAM: (a.timeInAM as string) ?? null,
+                timeOutAM: (a.timeOutAM as string) ?? null,
+                timeInPM: (a.timeInPM as string) ?? null,
+                timeOutPM: (a.timeOutPM as string) ?? null,
+                block: (a.block as string) ?? "",
+                year: (a.year as string) ?? "",
+                course: (a.course as string) ?? "",
+              } as Attendee)
+          );
+          setAttendees(normalized);
+        }
+      } catch (err) {
+        // keep local attendees from event prop as fallback
+        console.warn(
+          "Failed to fetch attendees from API, using event.attendees",
+          err
+        );
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [event]);
 
+  const handleApproveAttendee = (
+    newAttendee: Partial<Attendee> & { _id?: string; id?: string },
+    time: string,
+    isTimeIn: boolean,
+    period: "AM" | "PM"
+  ) => {
+    // server will create the Date on its side; we only need to tell it which field to set
+    const getId = (a: Partial<Attendee>) => a._id ?? a.id ?? "";
+    setAttendees((prev) => {
+      const exists = prev.find((a) => getId(a) === getId(newAttendee));
       if (exists) {
-        return prev.map(a =>
-          a.id === newAttendee.id
-            ? {
+        return prev.map((a) =>
+          getId(a) === getId(newAttendee)
+            ? ({
                 ...a,
-                ...(isTimeIn && period === 'AM' ? { timeInAM: time } : {}),
-                ...(!isTimeIn && period === 'AM' ? { timeOutAM: time } : {}),
-                ...(isTimeIn && period === 'PM' ? { timeInPM: time } : {}),
-                ...(!isTimeIn && period === 'PM' ? { timeOutPM: time } : {}),
-              }
+                ...(isTimeIn && period === "AM" ? { timeInAM: time } : {}),
+                ...(!isTimeIn && period === "AM" ? { timeOutAM: time } : {}),
+                ...(isTimeIn && period === "PM" ? { timeInPM: time } : {}),
+                ...(!isTimeIn && period === "PM" ? { timeOutPM: time } : {}),
+              } as Attendee)
             : a
         );
-      } else {
-        return [
-          ...prev,
-          {
-            ...newAttendee,
-            timeInAM: isTimeIn && period === 'AM' ? time : undefined,
-            timeOutAM: !isTimeIn && period === 'AM' ? time : undefined,
-            timeInPM: isTimeIn && period === 'PM' ? time : undefined,
-            timeOutPM: !isTimeIn && period === 'PM' ? time : undefined,
-          }
-        ];
       }
+      return [
+        ...prev,
+        {
+          ...(newAttendee as Attendee),
+          _id: newAttendee._id ?? newAttendee.id ?? "",
+          timeInAM: isTimeIn && period === "AM" ? time : undefined,
+          timeOutAM: !isTimeIn && period === "AM" ? time : undefined,
+          timeInPM: isTimeIn && period === "PM" ? time : undefined,
+          timeOutPM: !isTimeIn && period === "PM" ? time : undefined,
+        } as Attendee,
+      ];
     });
     setShowScanner(false);
+
+    // send to backend
+    (async () => {
+      try {
+        const studentId = newAttendee._id ?? newAttendee.id ?? "";
+        const payload = {
+          event_id: event._id ?? event.id ?? "",
+          student_id: studentId,
+        };
+
+        // Determine the server-side time field to set
+        const timeField = isTimeIn
+          ? period === "AM"
+            ? "timeInAM"
+            : "timeInPM"
+          : period === "AM"
+          ? "timeOutAM"
+          : "timeOutPM";
+
+        await saveAttendance(payload, timeField);
+      } catch (err) {
+        // non-fatal: keep UI updated but log error
+        // log intentionally left (no-console not enforced here)
+        console.error("Failed to save attendance", err);
+      }
+    })();
   };
 
-
   // Filter attendees based on search and filters
-  const filteredAttendees = attendees.filter(attendee => {
+  const filteredAttendees = attendees.filter((attendee) => {
+    const idVal = (attendee._id ?? attendee.id ?? "").toLowerCase();
     const matchesSearch =
       attendee.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      attendee.id.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesBlock = selectedBlock === 'All Blocks' || attendee.block === selectedBlock;
-    const matchesYear = selectedYear === 'All Years' || attendee.year === selectedYear;
-    const matchesCourse = selectedCourse === 'All Courses' || attendee.course === selectedCourse;
+      idVal.includes(searchTerm.toLowerCase());
+    const matchesBlock =
+      selectedBlock === "All Blocks" || attendee.block === selectedBlock;
+    const matchesYear =
+      selectedYear === "All Years" || attendee.year === selectedYear;
+    const matchesCourse =
+      selectedCourse === "All Courses" || attendee.course === selectedCourse;
 
     return matchesSearch && matchesBlock && matchesYear && matchesCourse;
   });
 
   // Get unique values for filter options
-  const blocks = ['All Blocks', ...Array.from(new Set(attendees.map(a => a.block)))];
-  const years = ['All Years', ...Array.from(new Set(attendees.map(a => a.year)))];
-  const courses = ['All Courses', ...Array.from(new Set(attendees.map(a => a.course)))];
+  const blocks = [
+    "All Blocks",
+    ...Array.from(new Set(attendees.map((a) => a.block))),
+  ];
+  const years = [
+    "All Years",
+    ...Array.from(new Set(attendees.map((a) => a.year))),
+  ];
+  const courses = [
+    "All Courses",
+    ...Array.from(new Set(attendees.map((a) => a.course))),
+  ];
 
   // Calculate statistics
   const totalAttendees = attendees.length;
-  const presentCount = attendees.filter(a => a.timeInAM || a.timeInPM).length;
-  const attendanceRate = totalAttendees > 0 ? Math.round((presentCount / totalAttendees) * 100) : 0;
+  const presentCount = attendees.filter((a) => a.timeInAM || a.timeInPM).length;
+  const formatTime = (iso?: string | null) => {
+    if (!iso) return null;
+    try {
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return iso;
+      return d.toLocaleString();
+    } catch {
+      return iso;
+    }
+  };
+  const attendanceRate =
+    totalAttendees > 488
+      ? Math.round((presentCount / totalAttendees) * 100)
+      : 0;
 
   return (
     <motion.div
@@ -126,31 +214,58 @@ export const EventDetailsPage: React.FC<EventDetailsPageProps> = ({ event, onBac
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         {/* Event Details Section */}
         <div className="bg-white rounded-lg p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-800 mb-4">Event Details</h2>
+          <h2 className="text-lg font-semibold text-gray-800 mb-4">
+            Event Details
+          </h2>
           <div className="space-y-3">
-            <div><span className="text-gray-600 text-sm">Title: </span><span className="text-gray-800 font-medium">{event.title}</span></div>
-            <div><span className="text-gray-600 text-sm">Date: </span><span className="text-gray-800 font-medium">{event.date}</span></div>
-            <div><span className="text-gray-600 text-sm">Time: </span><span className="text-gray-800 font-medium">{event.time}</span></div>
-            <div><span className="text-gray-600 text-sm">Location: </span><span className="text-gray-800 font-medium">{event.location}</span></div>
-            <div><span className="text-gray-600 text-sm">Description: </span><span className="text-gray-800 font-medium">{event.description || event.title}</span></div>
+            <div>
+              <span className="text-gray-600 text-sm">Title: </span>
+              <span className="text-gray-800 font-medium">{event.title}</span>
+            </div>
+            <div>
+              <span className="text-gray-600 text-sm">Date: </span>
+              <span className="text-gray-800 font-medium">{event.date}</span>
+            </div>
+            <div>
+              <span className="text-gray-600 text-sm">Time: </span>
+              <span className="text-gray-800 font-medium">{event.time}</span>
+            </div>
+            <div>
+              <span className="text-gray-600 text-sm">Location: </span>
+              <span className="text-gray-800 font-medium">
+                {event.location}
+              </span>
+            </div>
+            <div>
+              <span className="text-gray-600 text-sm">Description: </span>
+              <span className="text-gray-800 font-medium">
+                {event.description || event.title}
+              </span>
+            </div>
           </div>
         </div>
 
         {/* Attendance Statistics */}
         <div className="bg-white rounded-lg p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-800 mb-4">Attendance Statistics</h2>
+          <h2 className="text-lg font-semibold text-gray-800 mb-4">
+            Attendance Statistics
+          </h2>
           <div className="space-y-4">
             <div className="flex justify-between items-center">
               <span className="text-gray-600 text-sm">Total Attendees:</span>
-              <span className="text-2xl font-bold text-gray-800">{totalAttendees}</span>
+              <span className="text-2xl font-bold text-gray-800">
+                {totalAttendees}
+              </span>
             </div>
             <div className="pt-3 border-t">
               <div className="flex justify-between items-center mb-2">
                 <span className="text-gray-600 text-sm">Attendance Rate:</span>
-                <span className="text-lg font-semibold text-blue-600">{attendanceRate}%</span>
+                <span className="text-lg font-semibold text-blue-600">
+                  {attendanceRate}%
+                </span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
+                <div
                   className="bg-blue-600 h-2 rounded-full transition-all duration-500"
                   style={{ width: `${attendanceRate}%` }}
                 />
@@ -161,7 +276,9 @@ export const EventDetailsPage: React.FC<EventDetailsPageProps> = ({ event, onBac
 
         {/* Search & Filter Section */}
         <div className="bg-white rounded-lg p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-800 mb-4">Search & Filter</h2>
+          <h2 className="text-lg font-semibold text-gray-800 mb-4">
+            Search & Filter
+          </h2>
           <div className="space-y-4">
             <input
               type="text"
@@ -172,22 +289,55 @@ export const EventDetailsPage: React.FC<EventDetailsPageProps> = ({ event, onBac
             />
             <div className="grid grid-cols-2 gap-3">
               <div className="relative">
-                <select value={selectedBlock} onChange={(e) => setSelectedBlock(e.target.value)} className="w-full appearance-none bg-white border border-gray-300 rounded px-4 py-2 pr-8 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  {blocks.map(block => <option key={block} value={block}>{block}</option>)}
+                <select
+                  value={selectedBlock}
+                  onChange={(e) => setSelectedBlock(e.target.value)}
+                  className="w-full appearance-none bg-white border border-gray-300 rounded px-4 py-2 pr-8 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {blocks.map((block) => (
+                    <option key={block} value={block}>
+                      {block}
+                    </option>
+                  ))}
                 </select>
-                <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
+                <ChevronDown
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none"
+                  size={16}
+                />
               </div>
               <div className="relative">
-                <select value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)} className="w-full appearance-none bg-white border border-gray-300 rounded px-4 py-2 pr-8 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  {years.map(year => <option key={year} value={year}>{year}</option>)}
+                <select
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(e.target.value)}
+                  className="w-full appearance-none bg-white border border-gray-300 rounded px-4 py-2 pr-8 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {years.map((year) => (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  ))}
                 </select>
-                <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
+                <ChevronDown
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none"
+                  size={16}
+                />
               </div>
               <div className="relative">
-                <select value={selectedCourse} onChange={(e) => setSelectedCourse(e.target.value)} className="w-full appearance-none bg-white border border-gray-300 rounded px-4 py-2 pr-8 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  {courses.map(course => <option key={course} value={course}>{course}</option>)}
+                <select
+                  value={selectedCourse}
+                  onChange={(e) => setSelectedCourse(e.target.value)}
+                  className="w-full appearance-none bg-white border border-gray-300 rounded px-4 py-2 pr-8 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {courses.map((course) => (
+                    <option key={course} value={course}>
+                      {course}
+                    </option>
+                  ))}
                 </select>
-                <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
+                <ChevronDown
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none"
+                  size={16}
+                />
               </div>
             </div>
           </div>
@@ -197,37 +347,66 @@ export const EventDetailsPage: React.FC<EventDetailsPageProps> = ({ event, onBac
       {/* Attendees Table */}
       <div className="bg-white rounded-lg shadow-sm overflow-auto flex-1 flex flex-col">
         <div className="p-4 border-b border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-800">Attendees ({filteredAttendees.length})</h3>
+          <h3 className="text-lg font-semibold text-gray-800">
+            Attendees ({filteredAttendees.length})
+          </h3>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 sticky top-0">
               <tr>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">ID</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Name</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Block</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Year</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Course</th>
-                <th className="text-center py-3 px-4 text-sm font-medium text-gray-700">Time In(AM)</th>
-                <th className="text-center py-3 px-4 text-sm font-medium text-gray-700">Time Out(AM)</th>
-                <th className="text-center py-3 px-4 text-sm font-medium text-gray-700">Time In(PM)</th>
-                <th className="text-center py-3 px-4 text-sm font-medium text-gray-700">Time Out(PM)</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">
+                  Student ID
+                </th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">
+                  Name
+                </th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">
+                  Section
+                </th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">
+                  Email
+                </th>
+                <th className="text-center py-3 px-4 text-sm font-medium text-gray-700">
+                  Time In(AM)
+                </th>
+                <th className="text-center py-3 px-4 text-sm font-medium text-gray-700">
+                  Time Out(AM)
+                </th>
+                <th className="text-center py-3 px-4 text-sm font-medium text-gray-700">
+                  Time In(PM)
+                </th>
+                <th className="text-center py-3 px-4 text-sm font-medium text-gray-700">
+                  Time Out(PM)
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
               {filteredAttendees.length > 0 ? (
-                filteredAttendees.map(attendee => (
-                  <tr key={attendee.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="py-3 px-4 text-sm text-gray-900">{attendee.id}</td>
-                    <td className="py-3 px-4 text-sm text-gray-900 font-medium">{attendee.name}</td>
-                    <td className="py-3 px-4 text-sm text-gray-600">{attendee.block}</td>
-                    <td className="py-3 px-4 text-sm text-gray-600">{attendee.year}</td>
-                    <td className="py-3 px-4 text-sm text-gray-600">{attendee.course}</td>
+                filteredAttendees.map((attendee) => (
+                  <tr
+                    key={attendee._id ?? attendee.student_id ?? attendee.id}
+                    className="hover:bg-gray-50 transition-colors"
+                  >
+                    <td className="py-3 px-4 text-sm text-gray-900">
+                      {attendee.student_id ?? attendee._id ?? attendee.id}
+                    </td>
+                    <td className="py-3 px-4 text-sm text-gray-900 font-medium">
+                      {`${attendee.fname ?? ""} ${
+                        attendee.lname ?? ""
+                      }`.trim() || attendee.name}
+                    </td>
+                    <td className="py-3 px-4 text-sm text-gray-600">
+                      {attendee.section ?? attendee.block ?? "-"}
+                    </td>
+                    <td className="py-3 px-4 text-sm text-gray-600">
+                      {attendee.email ?? "-"}
+                    </td>
                     <td className="py-3 px-4 text-sm text-gray-600 text-center">
                       {attendee.timeInAM ? (
                         <span className="inline-flex items-center gap-1 text-green-600">
                           <Clock size={12} />
-                          {attendee.timeInAM}
+                          {formatTime(attendee.timeInAM)}
                         </span>
                       ) : (
                         <span className="text-gray-400">-</span>
@@ -237,7 +416,7 @@ export const EventDetailsPage: React.FC<EventDetailsPageProps> = ({ event, onBac
                       {attendee.timeOutAM ? (
                         <span className="inline-flex items-center gap-1 text-red-600">
                           <Clock size={12} />
-                          {attendee.timeOutAM}
+                          {formatTime(attendee.timeOutAM)}
                         </span>
                       ) : (
                         <span className="text-gray-400">-</span>
@@ -247,7 +426,7 @@ export const EventDetailsPage: React.FC<EventDetailsPageProps> = ({ event, onBac
                       {attendee.timeInPM ? (
                         <span className="inline-flex items-center gap-1 text-green-600">
                           <Clock size={12} />
-                          {attendee.timeInPM}
+                          {formatTime(attendee.timeInPM)}
                         </span>
                       ) : (
                         <span className="text-gray-400">-</span>
@@ -257,7 +436,7 @@ export const EventDetailsPage: React.FC<EventDetailsPageProps> = ({ event, onBac
                       {attendee.timeOutPM ? (
                         <span className="inline-flex items-center gap-1 text-red-600">
                           <Clock size={12} />
-                          {attendee.timeOutPM}
+                          {formatTime(attendee.timeOutPM)}
                         </span>
                       ) : (
                         <span className="text-gray-400">-</span>
@@ -267,7 +446,10 @@ export const EventDetailsPage: React.FC<EventDetailsPageProps> = ({ event, onBac
                 ))
               ) : (
                 <tr>
-                  <td colSpan={8} className="py-8 px-4 text-center text-gray-500">
+                  <td
+                    colSpan={8}
+                    className="py-8 px-4 text-center text-gray-500"
+                  >
                     No attendees found matching your criteria
                   </td>
                 </tr>
